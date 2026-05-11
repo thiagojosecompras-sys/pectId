@@ -1,0 +1,22 @@
+{
+  "placeholderImages": [
+    {
+      "id": "professional-avatar",
+      "description": "Healthcare professional avatar",
+      "imageUrl": "https://picsum.photos/seed/doc1/200/200",
+      "imageHint": "doctor professional"
+    },
+    {
+      "id": "patient-1",
+      "description": "Patient portrait 1",
+      "imageUrl": "https://picsum.photos/seed/p1/200/200",
+      "imageHint": "patient person"
+    },
+    {
+      "id": "patient-2",
+      "description": "Patient portrait 2",
+      "imageUrl": "https://picsum.photos/seed/p2/200/200",
+      "imageHint": "patient person"
+    }
+  ]
+}
