@@ -19,7 +19,6 @@ import {
   Loader2,
   Trash2,
   PlusCircle,
-  ClipboardList,
   CalendarDays,
   UserRound
 } from "lucide-react"
@@ -46,9 +45,16 @@ export default function PatientDetailPage() {
 
   const evolutionsQuery = useMemo(() => {
     if (!db) return null;
-    return query(collection(db, 'patients', id as string, 'evolutions'), orderBy('date', 'desc'));
+    // Removido o orderBy date temporariamente para garantir que os dados apareçam mesmo sem índice criado
+    return query(collection(db, 'patients', id as string, 'evolutions'));
   }, [db, id])
   const { data: evolutions, loading: loadingEvolutions } = useCollection(evolutionsQuery)
+
+  // Ordenação manual para evitar problemas de índice no Firestore Demo
+  const sortedEvolutions = useMemo(() => {
+    if (!evolutions) return [];
+    return [...evolutions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [evolutions]);
 
   const handleAddActivityManual = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -141,7 +147,9 @@ export default function PatientDetailPage() {
               </CardHeader>
               <CardContent className="px-4 sm:px-6">
                 <div className="space-y-3">
-                  {loadingActivities ? <Loader2 className="animate-spin mx-auto" /> : activities?.length === 0 ? (
+                  {loadingActivities ? (
+                    <div className="flex justify-center p-8"><Loader2 className="animate-spin text-primary" /></div>
+                  ) : activities?.length === 0 ? (
                     <div className="text-center py-10 border-2 border-dashed rounded-xl">
                       <p className="text-muted-foreground text-sm">Nenhuma atividade ativa.</p>
                     </div>
@@ -175,9 +183,13 @@ export default function PatientDetailPage() {
             </CardHeader>
             <CardContent className="px-4 sm:px-6">
               <div className="relative space-y-6 before:absolute before:inset-0 before:ml-5 before:-translate-x-px before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-slate-200 before:to-transparent">
-                {loadingEvolutions ? <Loader2 className="animate-spin mx-auto" /> : evolutions?.length === 0 ? (
-                   <p className="text-center py-10 text-muted-foreground text-sm">Sem histórico registrado.</p>
-                ) : evolutions?.map((ev: any) => (
+                {loadingEvolutions ? (
+                  <div className="flex justify-center p-8"><Loader2 className="animate-spin text-primary" /></div>
+                ) : sortedEvolutions.length === 0 ? (
+                   <div className="text-center py-10 border-2 border-dashed rounded-xl">
+                    <p className="text-muted-foreground text-sm">Sem histórico registrado.</p>
+                   </div>
+                ) : sortedEvolutions.map((ev: any) => (
                   <div key={ev.id} className="relative flex items-start gap-4 sm:gap-6 pl-12">
                     <div className="absolute left-0 mt-1.5 h-10 w-10 flex items-center justify-center rounded-full bg-white border-2 border-primary shadow-sm z-10">
                       <CalendarDays className="h-5 w-5 text-primary" />
