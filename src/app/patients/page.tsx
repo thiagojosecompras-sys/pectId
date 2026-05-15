@@ -65,8 +65,8 @@ export default function PatientsPage() {
   const filteredPatients = useMemo(() => {
     if (!patients) return [];
     return patients.filter((p: any) => 
-      p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      p.clinicalId.toLowerCase().includes(searchTerm.toLowerCase())
+      p.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      p.clinicalId?.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [patients, searchTerm]);
 
@@ -77,9 +77,9 @@ export default function PatientsPage() {
     setIsSaving(true)
     const formData = new FormData(e.currentTarget)
     const patientData = {
-      name: formData.get('name'),
+      name: formData.get('name') as string,
       age: Number(formData.get('age')),
-      clinicalId: formData.get('clinicalId'),
+      clinicalId: formData.get('clinicalId') as string,
       status: 'active',
       type: 'Avaliar',
       lastVisit: new Date().toISOString().split('T')[0],
@@ -88,21 +88,21 @@ export default function PatientsPage() {
     
     const patientsCollectionRef = collection(db, 'patients')
 
+    // Fechamos o modal e limpamos o estado de carregamento de forma otimista ou logo após a chamada
     addDoc(patientsCollectionRef, patientData)
       .then(() => {
         toast({ title: "Paciente Cadastrado", description: "O registro foi criado com sucesso." })
         setOpen(false)
+        setIsSaving(false)
       })
       .catch(async (serverError) => {
+        setIsSaving(false)
         const permissionError = new FirestorePermissionError({
           path: patientsCollectionRef.path,
           operation: 'create',
           requestResourceData: patientData,
         });
         errorEmitter.emit('permission-error', permissionError);
-      })
-      .finally(() => {
-        setIsSaving(false)
       })
   }
 
@@ -116,39 +116,39 @@ export default function PatientsPage() {
         
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button className="gap-2 w-full md:w-auto">
+            <Button className="gap-2 w-full md:w-auto shadow-md">
               <UserPlus className="h-4 w-4" />
               Novo Paciente
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px]">
+          <DialogContent className="sm:max-w-[500px] rounded-2xl">
             <form onSubmit={handleCreatePatient}>
               <DialogHeader>
                 <DialogTitle>Cadastrar Novo Paciente</DialogTitle>
                 <DialogDescription>
-                  Informações iniciais para o prontuário.
+                  Preencha as informações básicas para iniciar o prontuário.
                 </DialogDescription>
               </DialogHeader>
-              <div className="grid gap-4 py-4">
+              <div className="grid gap-5 py-6">
                 <div className="grid gap-2">
                   <Label htmlFor="name">Nome Completo</Label>
-                  <Input id="name" name="name" required />
+                  <Input id="name" name="name" placeholder="Ex: João da Silva" required className="rounded-xl h-11" />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="grid gap-2">
                     <Label htmlFor="age">Idade</Label>
-                    <Input id="age" name="age" type="number" required />
+                    <Input id="age" name="age" type="number" required className="rounded-xl h-11" />
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="clinicalId">ID Clínico</Label>
-                    <Input id="clinicalId" name="clinicalId" placeholder="HOSP-XXXX" required />
+                    <Input id="clinicalId" name="clinicalId" placeholder="HOSP-XXXX" required className="rounded-xl h-11" />
                   </div>
                 </div>
               </div>
-              <DialogFooter>
-                <Button type="submit" disabled={isSaving}>
-                  {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Salvar Registro
+              <DialogFooter className="gap-2">
+                <Button type="button" variant="ghost" onClick={() => setOpen(false)} disabled={isSaving}>Cancelar</Button>
+                <Button type="submit" disabled={isSaving} className="min-w-[120px] shadow-sm">
+                  {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Salvar Registro"}
                 </Button>
               </DialogFooter>
             </form>
@@ -157,12 +157,12 @@ export default function PatientsPage() {
       </div>
 
       <Card className="border-none shadow-sm overflow-hidden">
-        <CardHeader className="pb-3">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+        <CardHeader className="pb-3 bg-white border-b">
+          <div className="relative max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Buscar por nome ou ID..."
-              className="pl-9"
+              className="pl-10 h-11 rounded-xl"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -171,35 +171,39 @@ export default function PatientsPage() {
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <Table>
-              <TableHeader>
+              <TableHeader className="bg-slate-50/50">
                 <TableRow>
-                  <TableHead className="min-w-[200px]">Paciente</TableHead>
-                  <TableHead>ID</TableHead>
-                  <TableHead className="hidden sm:table-cell">Idade</TableHead>
-                  <TableHead className="hidden md:table-cell">Especialidade</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
+                  <TableHead className="min-w-[200px] font-bold">Paciente</TableHead>
+                  <TableHead className="font-bold">ID</TableHead>
+                  <TableHead className="hidden sm:table-cell font-bold">Idade</TableHead>
+                  <TableHead className="hidden md:table-cell font-bold">Especialidade</TableHead>
+                  <TableHead className="font-bold">Status</TableHead>
+                  <TableHead className="text-right font-bold">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-10">
-                      <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" />
+                    <TableCell colSpan={6} className="text-center py-20">
+                      <div className="flex flex-col items-center gap-3">
+                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                        <span className="text-sm text-muted-foreground animate-pulse">Consultando base de dados...</span>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ) : filteredPatients?.map((patient: any) => (
-                  <TableRow key={patient.id}>
-                    <TableCell className="font-medium">{patient.name}</TableCell>
-                    <TableCell className="font-mono text-xs">{patient.clinicalId}</TableCell>
+                  <TableRow key={patient.id} className="group hover:bg-slate-50/80 transition-colors">
+                    <TableCell className="font-semibold">{patient.name}</TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground">{patient.clinicalId}</TableCell>
                     <TableCell className="hidden sm:table-cell">{patient.age} anos</TableCell>
                     <TableCell className="hidden md:table-cell">
-                      <Badge variant="outline">{patient.type}</Badge>
+                      <Badge variant="outline" className="font-medium">{patient.type}</Badge>
                     </TableCell>
                     <TableCell>
                       <Badge 
                         variant={patient.status === "active" ? "default" : "secondary"}
-                        className={patient.status === "critical" ? "bg-red-100 text-red-700 border-red-200" : ""}
+                        className={patient.status === "critical" ? "bg-red-100 text-red-700 border-red-200 hover:bg-red-100" : 
+                                   patient.status === "active" ? "bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-100" : ""}
                       >
                         {patient.status === 'active' ? 'Em Reabilitação' : patient.status === 'critical' ? 'Crítico' : 'Estável'}
                       </Badge>
@@ -207,16 +211,17 @@ export default function PatientsPage() {
                     <TableCell className="text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon">
+                          <Button variant="ghost" size="icon" className="rounded-full h-8 w-8">
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuLabel>Ações</DropdownMenuLabel>
+                        <DropdownMenuContent align="end" className="rounded-xl">
+                          <DropdownMenuLabel>Ações Clínicas</DropdownMenuLabel>
+                          <DropdownMenuSeparator />
                           <DropdownMenuItem asChild>
-                            <Link href={`/patients/${patient.id}`} className="flex items-center gap-2">
+                            <Link href={`/patients/${patient.id}`} className="flex items-center gap-2 cursor-pointer">
                               <FileText className="h-4 w-4" />
-                              Ver Prontuário
+                              Ver Prontuário Completo
                             </Link>
                           </DropdownMenuItem>
                         </DropdownMenuContent>
@@ -226,8 +231,11 @@ export default function PatientsPage() {
                 ))}
                 {(!filteredPatients || filteredPatients.length === 0) && !loading && (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
-                      Nenhum paciente encontrado.
+                    <TableCell colSpan={6} className="text-center py-20">
+                      <div className="flex flex-col items-center gap-2">
+                        <Activity className="h-10 w-10 text-slate-200" />
+                        <p className="text-muted-foreground font-medium">Nenhum registro encontrado para esta busca.</p>
+                      </div>
                     </TableCell>
                   </TableRow>
                 )}
