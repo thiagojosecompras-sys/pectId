@@ -65,6 +65,7 @@ export default function PatientDetailPage() {
   const sortedEvolutions = useMemo(() => {
     if (!evolutions) return [];
     return [...evolutions].sort((a, b) => {
+      // Prioriza datas das evoluções de demonstração
       const dateA = a.date ? new Date(a.date).getTime() : 0;
       const dateB = b.date ? new Date(b.date).getTime() : 0;
       return dateB - dateA;
