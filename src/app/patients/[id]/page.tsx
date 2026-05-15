@@ -30,7 +30,8 @@ import { errorEmitter } from "@/firebase/error-emitter"
 import { FirestorePermissionError } from "@/firebase/errors"
 
 export default function PatientDetailPage() {
-  const { id } = useParams()
+  const params = useParams()
+  const id = params?.id as string
   const { toast } = useToast()
   const db = useFirestore()
   
@@ -43,17 +44,17 @@ export default function PatientDetailPage() {
   }, [])
 
   // Referência do Paciente
-  const patientRef = useMemo(() => db ? doc(db, 'patients', id as string) : null, [db, id])
-  const { data: patient } = useDoc(patientRef)
+  const patientRef = useMemoFirebase(() => db && id ? doc(db, 'patients', id) : null, [db, id])
+  const { data: patient, loading: loadingPatient } = useDoc(patientRef)
   
-  // Consulta de Atividades (Relacionamento via patientId)
+  // Consulta de Atividades (Relacionamento via patientId em coleção flat)
   const activitiesQuery = useMemoFirebase(() => {
     if (!db || !id) return null;
     return query(collection(db, 'activities'), where('patientId', '==', id));
   }, [db, id]);
   const { data: activities, loading: loadingActivities } = useCollection(activitiesQuery)
 
-  // Consulta de Evoluções (Relacionamento via patientId)
+  // Consulta de Evoluções (Relacionamento via patientId em coleção flat)
   const evolutionsQuery = useMemoFirebase(() => {
     if (!db || !id) return null;
     return query(collection(db, 'evolutions'), where('patientId', '==', id));
@@ -73,7 +74,7 @@ export default function PatientDetailPage() {
     const formData = new FormData(e.currentTarget)
     
     const activityData = {
-      patientId: id as string,
+      patientId: id,
       name: formData.get('name') as string,
       description: formData.get('description') as string,
       difficultyType: formData.get('type') as string,
@@ -120,7 +121,8 @@ export default function PatientDetailPage() {
   }
 
   if (!mounted) return null
-  if (!patient && mounted) return <div className="p-10 text-center"><Loader2 className="animate-spin mx-auto text-primary" /></div>
+  if (loadingPatient) return <div className="p-10 text-center"><Loader2 className="animate-spin mx-auto text-primary" /></div>
+  if (!patient) return <div className="p-10 text-center">Paciente não encontrado.</div>
 
   return (
     <div className="space-y-6 pb-20">

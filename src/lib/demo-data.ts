@@ -97,24 +97,20 @@ export async function seedDemoData(db: Firestore) {
   const patientsColl = collection(db, 'patients');
   const patientsSnap = await getDocs(query(patientsColl, limit(1)));
   
-  // Se o banco já tiver pacientes, não fazemos nada
   if (!patientsSnap.empty) {
-    console.log("Banco de dados já alimentado.");
     return;
   }
-
-  console.log("Iniciando alimentação do banco de dados...");
 
   for (const patientData of demoPatients) {
     const { evolutions, activities, ...patientInfo } = patientData;
     
-    // 1. Criar Paciente
+    // 1. Criar Paciente com ID fixo
     await setDoc(doc(db, 'patients', patientData.id), { 
       ...patientInfo, 
       createdAt: serverTimestamp() 
     });
 
-    // 2. Criar Evoluções (Coleção Flat)
+    // 2. Criar Evoluções (Coleção Flat para histórico)
     const evolutionsColl = collection(db, 'evolutions');
     for (const ev of evolutions) {
       await setDoc(doc(evolutionsColl), { 
@@ -124,7 +120,7 @@ export async function seedDemoData(db: Firestore) {
       });
     }
 
-    // 3. Criar Atividades (Coleção Flat)
+    // 3. Criar Atividades (Coleção Flat para cronograma)
     const activityColl = collection(db, 'activities');
     for (const act of activities) {
       await setDoc(doc(activityColl), { 
@@ -134,6 +130,4 @@ export async function seedDemoData(db: Firestore) {
       });
     }
   }
-  
-  console.log("Banco de dados alimentado com sucesso.");
 }

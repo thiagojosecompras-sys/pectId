@@ -41,7 +41,7 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import Link from "next/link"
-import { useFirestore, useCollection } from "@/firebase"
+import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
 import { collection, addDoc, serverTimestamp } from "firebase/firestore"
 import { useToast } from "@/hooks/use-toast"
 import { errorEmitter } from "@/firebase/error-emitter"
@@ -55,17 +55,20 @@ export default function PatientsPage() {
   const { toast } = useToast()
   
   const db = useFirestore()
-  const patientsQuery = useMemo(() => db ? collection(db, 'patients') : null, [db])
+  const patientsQuery = useMemoFirebase(() => db ? collection(db, 'patients') : null, [db])
   const { data: patients, loading } = useCollection(patientsQuery)
 
   useEffect(() => {
     if (db) seedDemoData(db)
   }, [db])
 
-  const filteredPatients = patients?.filter((p: any) => 
-    p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    p.clinicalId.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  const filteredPatients = useMemo(() => {
+    if (!patients) return [];
+    return patients.filter((p: any) => 
+      p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      p.clinicalId.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [patients, searchTerm]);
 
   const handleCreatePatient = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -215,10 +218,6 @@ export default function PatientsPage() {
                               <FileText className="h-4 w-4" />
                               Ver Prontuário
                             </Link>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem className="flex items-center gap-2">
-                            <Activity className="h-4 w-4" />
-                            Nova Avaliação
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
