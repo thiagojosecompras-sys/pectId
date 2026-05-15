@@ -98,21 +98,24 @@ export async function seedDemoData(db: Firestore) {
     const patientRef = doc(db, 'patients', patientData.id);
     const patientSnap = await getDoc(patientRef);
     
-    // Se o paciente não existe, cria ele e suas sub-coleções
-    if (!patientSnap.exists()) {
-      const { evolutions, activities, ...patient } = patientData;
-      
-      // Salvar paciente
-      await setDoc(patientRef, { ...patient, createdAt: serverTimestamp() });
+    const { evolutions, activities, ...patientInfo } = patientData;
 
-      // Salvar Evoluções
-      const evolutionColl = collection(db, 'patients', patientData.id, 'evolutions');
+    // Garante que o documento do paciente exista ou seja atualizado
+    await setDoc(patientRef, { ...patientInfo, createdAt: serverTimestamp() }, { merge: true });
+
+    // Verifica e popula Evoluções se a sub-coleção estiver vazia
+    const evolutionColl = collection(db, 'patients', patientData.id, 'evolutions');
+    const evSnap = await getDocs(evolutionColl);
+    if (evSnap.empty) {
       for (const ev of evolutions) {
         await setDoc(doc(evolutionColl), { ...ev, createdAt: serverTimestamp() });
       }
+    }
 
-      // Salvar Atividades
-      const activityColl = collection(db, 'patients', patientData.id, 'suggestedActivities');
+    // Verifica e popula Atividades se a sub-coleção estiver vazia
+    const activityColl = collection(db, 'patients', patientData.id, 'suggestedActivities');
+    const actSnap = await getDocs(activityColl);
+    if (actSnap.empty) {
       for (const act of activities) {
         await setDoc(doc(activityColl), { ...act, createdAt: serverTimestamp() });
       }

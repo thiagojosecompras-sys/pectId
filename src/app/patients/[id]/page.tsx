@@ -1,7 +1,7 @@
 
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { useParams } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -25,7 +25,7 @@ import {
 import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
 import { useFirestore, useDoc, useCollection } from "@/firebase"
-import { doc, collection, addDoc, serverTimestamp, deleteDoc, query, orderBy } from "firebase/firestore"
+import { doc, collection, addDoc, serverTimestamp, deleteDoc, query } from "firebase/firestore"
 import { errorEmitter } from "@/firebase/error-emitter"
 import { FirestorePermissionError } from "@/firebase/errors"
 
@@ -36,6 +36,11 @@ export default function PatientDetailPage() {
   
   const [activeTab, setActiveTab] = useState("plan")
   const [isSaving, setIsSaving] = useState(false)
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   const patientRef = useMemo(() => db ? doc(db, 'patients', id as string) : null, [db, id])
   const { data: patient } = useDoc(patientRef)
@@ -45,12 +50,10 @@ export default function PatientDetailPage() {
 
   const evolutionsQuery = useMemo(() => {
     if (!db) return null;
-    // Removido o orderBy date temporariamente para garantir que os dados apareçam mesmo sem índice criado
     return query(collection(db, 'patients', id as string, 'evolutions'));
   }, [db, id])
   const { data: evolutions, loading: loadingEvolutions } = useCollection(evolutionsQuery)
 
-  // Ordenação manual para evitar problemas de índice no Firestore Demo
   const sortedEvolutions = useMemo(() => {
     if (!evolutions) return [];
     return [...evolutions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -109,6 +112,7 @@ export default function PatientDetailPage() {
       })
   }
 
+  if (!mounted) return null
   if (!patient) return <div className="p-10 text-center"><Loader2 className="animate-spin mx-auto text-primary" /></div>
 
   return (
@@ -196,7 +200,9 @@ export default function PatientDetailPage() {
                     </div>
                     <div className="flex-1 bg-muted/30 p-4 rounded-xl border border-muted-foreground/10">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-2 gap-1">
-                        <time className="text-xs font-bold text-primary">{new Date(ev.date).toLocaleDateString('pt-BR')}</time>
+                        <time className="text-xs font-bold text-primary">
+                          {mounted ? new Date(ev.date).toLocaleDateString('pt-BR') : ev.date}
+                        </time>
                         <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
                           <UserRound className="h-3 w-3" />
                           <span>{ev.professional}</span>
