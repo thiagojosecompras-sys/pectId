@@ -17,9 +17,10 @@
     },
     "Activity": {
       "title": "Activity",
-      "description": "Atividade de reabilitação sugerida ou em execução",
+      "description": "Atividade de reabilitação vinculada a um paciente",
       "type": "object",
       "properties": {
+        "patientId": { "type": "string" },
         "name": { "type": "string" },
         "description": { "type": "string" },
         "difficultyType": { "type": "string", "enum": ["motor", "cognitive", "dailyActivity"] },
@@ -29,9 +30,10 @@
     },
     "Evolution": {
       "title": "Evolution",
-      "description": "Registro de evolução clínica (histórico de consultas)",
+      "description": "Registro de evolução clínica vinculado a um paciente",
       "type": "object",
       "properties": {
+        "patientId": { "type": "string" },
         "date": { "type": "string", "format": "date" },
         "note": { "type": "string" },
         "professional": { "type": "string" }
@@ -46,13 +48,13 @@
       "schema": "#/backend/entities/Patient",
       "description": "Documento principal do paciente"
     },
-    "/patients/{patientId}/suggestedActivities/{activityId}": {
+    "/activities/{activityId}": {
       "schema": "#/backend/entities/Activity",
-      "description": "Atividades recomendadas"
+      "description": "Coleção global de atividades vinculadas por patientId"
     },
-    "/patients/{patientId}/evolutions/{evolutionId}": {
+    "/evolutions/{evolutionId}": {
       "schema": "#/backend/entities/Evolution",
-      "description": "Histórico de evolução clínica"
+      "description": "Coleção global de evoluções vinculadas por patientId"
     }
   }
 }

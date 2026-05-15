@@ -1,5 +1,5 @@
 
-import { doc, setDoc, collection, getDocs, Firestore, serverTimestamp, getDoc } from 'firebase/firestore';
+import { doc, setDoc, collection, getDocs, Firestore, serverTimestamp, query, limit } from 'firebase/firestore';
 
 export const demoPatients = [
   { 
@@ -94,31 +94,46 @@ export const demoPatients = [
 ];
 
 export async function seedDemoData(db: Firestore) {
+  const patientsColl = collection(db, 'patients');
+  const patientsSnap = await getDocs(query(patientsColl, limit(1)));
+  
+  // Se o banco já tiver pacientes, não fazemos nada
+  if (!patientsSnap.empty) {
+    console.log("Banco de dados já alimentado.");
+    return;
+  }
+
+  console.log("Iniciando alimentação do banco de dados...");
+
   for (const patientData of demoPatients) {
-    const patientRef = doc(db, 'patients', patientData.id);
-    const patientSnap = await getDoc(patientRef);
-    
     const { evolutions, activities, ...patientInfo } = patientData;
+    
+    // 1. Criar Paciente
+    await setDoc(doc(db, 'patients', patientData.id), { 
+      ...patientInfo, 
+      createdAt: serverTimestamp() 
+    });
 
-    // Garante que o documento do paciente exista ou seja atualizado
-    await setDoc(patientRef, { ...patientInfo, createdAt: serverTimestamp() }, { merge: true });
-
-    // Verifica e popula Evoluções se a sub-coleção estiver vazia
-    const evolutionColl = collection(db, 'patients', patientData.id, 'evolutions');
-    const evSnap = await getDocs(evolutionColl);
-    if (evSnap.empty) {
-      for (const ev of evolutions) {
-        await setDoc(doc(evolutionColl), { ...ev, createdAt: serverTimestamp() });
-      }
+    // 2. Criar Evoluções (Coleção Flat)
+    const evolutionsColl = collection(db, 'evolutions');
+    for (const ev of evolutions) {
+      await setDoc(doc(evolutionsColl), { 
+        ...ev, 
+        patientId: patientData.id, 
+        createdAt: serverTimestamp() 
+      });
     }
 
-    // Verifica e popula Atividades se a sub-coleção estiver vazia
-    const activityColl = collection(db, 'patients', patientData.id, 'suggestedActivities');
-    const actSnap = await getDocs(activityColl);
-    if (actSnap.empty) {
-      for (const act of activities) {
-        await setDoc(doc(activityColl), { ...act, createdAt: serverTimestamp() });
-      }
+    // 3. Criar Atividades (Coleção Flat)
+    const activityColl = collection(db, 'activities');
+    for (const act of activities) {
+      await setDoc(doc(activityColl), { 
+        ...act, 
+        patientId: patientData.id, 
+        createdAt: serverTimestamp() 
+      });
     }
   }
+  
+  console.log("Banco de dados alimentado com sucesso.");
 }

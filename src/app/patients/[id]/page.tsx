@@ -24,8 +24,8 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
-import { useFirestore, useDoc, useCollection } from "@/firebase"
-import { doc, collection, addDoc, serverTimestamp, deleteDoc, query } from "firebase/firestore"
+import { useFirestore, useDoc, useCollection, useMemoFirebase } from "@/firebase"
+import { doc, collection, addDoc, serverTimestamp, deleteDoc, query, where } from "firebase/firestore"
 import { errorEmitter } from "@/firebase/error-emitter"
 import { FirestorePermissionError } from "@/firebase/errors"
 
@@ -42,15 +42,21 @@ export default function PatientDetailPage() {
     setMounted(true)
   }, [])
 
+  // Referência do Paciente
   const patientRef = useMemo(() => db ? doc(db, 'patients', id as string) : null, [db, id])
   const { data: patient } = useDoc(patientRef)
   
-  const activitiesRef = useMemo(() => db ? collection(db, 'patients', id as string, 'suggestedActivities') : null, [db, id])
-  const { data: activities, loading: loadingActivities } = useCollection(activitiesRef)
+  // Consulta de Atividades (Relacionamento via patientId)
+  const activitiesQuery = useMemoFirebase(() => {
+    if (!db || !id) return null;
+    return query(collection(db, 'activities'), where('patientId', '==', id));
+  }, [db, id]);
+  const { data: activities, loading: loadingActivities } = useCollection(activitiesQuery)
 
-  const evolutionsQuery = useMemo(() => {
-    if (!db) return null;
-    return query(collection(db, 'patients', id as string, 'evolutions'));
+  // Consulta de Evoluções (Relacionamento via patientId)
+  const evolutionsQuery = useMemoFirebase(() => {
+    if (!db || !id) return null;
+    return query(collection(db, 'evolutions'), where('patientId', '==', id));
   }, [db, id])
   const { data: evolutions, loading: loadingEvolutions } = useCollection(evolutionsQuery)
 
@@ -61,12 +67,13 @@ export default function PatientDetailPage() {
 
   const handleAddActivityManual = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    if (!db) return
+    if (!db || !id) return
 
     setIsSaving(true)
     const formData = new FormData(e.currentTarget)
     
     const activityData = {
+      patientId: id as string,
       name: formData.get('name') as string,
       description: formData.get('description') as string,
       difficultyType: formData.get('type') as string,
@@ -74,7 +81,7 @@ export default function PatientDetailPage() {
       createdAt: serverTimestamp()
     }
 
-    const activitiesCollectionRef = collection(db, 'patients', id as string, 'suggestedActivities')
+    const activitiesCollectionRef = collection(db, 'activities')
     
     addDoc(activitiesCollectionRef, activityData)
       .then(() => {
@@ -97,7 +104,7 @@ export default function PatientDetailPage() {
 
   const handleDeleteActivity = (activityId: string) => {
     if (!db) return
-    const activityDocRef = doc(db, 'patients', id as string, 'suggestedActivities', activityId)
+    const activityDocRef = doc(db, 'activities', activityId)
     
     deleteDoc(activityDocRef)
       .then(() => {
@@ -113,7 +120,7 @@ export default function PatientDetailPage() {
   }
 
   if (!mounted) return null
-  if (!patient) return <div className="p-10 text-center"><Loader2 className="animate-spin mx-auto text-primary" /></div>
+  if (!patient && mounted) return <div className="p-10 text-center"><Loader2 className="animate-spin mx-auto text-primary" /></div>
 
   return (
     <div className="space-y-6 pb-20">
@@ -123,12 +130,12 @@ export default function PatientDetailPage() {
             <Link href="/patients"><ChevronLeft /></Link>
           </Button>
           <div className="min-w-0">
-            <h1 className="text-xl sm:text-2xl font-bold truncate">{patient.name}</h1>
+            <h1 className="text-xl sm:text-2xl font-bold truncate">{patient?.name}</h1>
             <div className="flex flex-wrap items-center gap-2 mt-1">
-              <Badge variant="secondary" className="text-[10px] sm:text-xs">ID: {patient.clinicalId}</Badge>
-              <Badge variant="outline" className="text-[10px] sm:text-xs">{patient.age} anos</Badge>
-              <Badge className={patient.status === 'active' ? 'bg-green-100 text-green-700 hover:bg-green-100' : 'bg-red-100 text-red-700 hover:bg-red-100'}>
-                {patient.status === 'active' ? 'Ativo' : 'Crítico'}
+              <Badge variant="secondary" className="text-[10px] sm:text-xs">ID: {patient?.clinicalId}</Badge>
+              <Badge variant="outline" className="text-[10px] sm:text-xs">{patient?.age} anos</Badge>
+              <Badge className={patient?.status === 'active' ? 'bg-green-100 text-green-700 hover:bg-green-100' : 'bg-red-100 text-red-700 hover:bg-red-100'}>
+                {patient?.status === 'active' ? 'Ativo' : 'Crítico'}
               </Badge>
             </div>
           </div>
