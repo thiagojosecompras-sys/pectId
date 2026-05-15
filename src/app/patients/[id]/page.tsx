@@ -7,25 +7,24 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { 
   Brain, 
   Accessibility, 
   Home, 
-  Sparkles, 
   ChevronLeft,
   Loader2,
-  Trash2
+  Trash2,
+  PlusCircle,
+  ClipboardList
 } from "lucide-react"
 import Link from "next/link"
-import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/hooks/use-toast"
-import { suggestRehabilitationActivities } from "@/ai/flows/suggest-rehabilitation-activities"
 import { useFirestore, useDoc, useCollection } from "@/firebase"
 import { doc, collection, addDoc, serverTimestamp, deleteDoc } from "firebase/firestore"
-
-const MOTOR_DIFFICULTIES = ["Fraqueza em membros inferiores", "Dificuldade de equilíbrio", "Espasticidade", "Amplitude de movimento reduzida"]
-const COGNITIVE_DIFFICULTIES = ["Lapsos de memória", "Dificuldade de concentração", "Desorientação temporal", "Afasia de expressão"]
-const ADL_DIFFICULTIES = ["Dificuldade ao se vestir", "Necessidade de auxílio na higiene", "Dificuldade na alimentação", "Dependência para locomoção externa"]
 
 export default function PatientDetailPage() {
   const { id } = useParams()
@@ -38,46 +37,31 @@ export default function PatientDetailPage() {
   const activitiesRef = useMemo(() => db ? collection(db, 'patients', id as string, 'suggestedActivities') : null, [db, id])
   const { data: activities, loading: loadingActivities } = useCollection(activitiesRef)
 
-  const [selectedMotor, setSelectedMotor] = useState<string[]>([])
-  const [selectedCognitive, setSelectedCognitive] = useState<string[]>([])
-  const [selectedADL, setSelectedADL] = useState<string[]>([])
-  const [isLoadingAI, setIsLoadingAI] = useState(false)
-  const [aiSuggestions, setAiSuggestions] = useState<any[]>([])
+  const [isSaving, setIsSaving] = useState(false)
 
-  const handleGeneratePlan = async () => {
-    if (selectedMotor.length === 0 && selectedCognitive.length === 0 && selectedADL.length === 0) {
-      toast({ title: "Seleção necessária", description: "Selecione dificuldades para a IA analisar.", variant: "destructive" })
-      return
-    }
-
-    setIsLoadingAI(true)
-    try {
-      const result = await suggestRehabilitationActivities({
-        motorDifficulties: selectedMotor,
-        cognitiveDifficulties: selectedCognitive,
-        dailyActivityDifficulties: selectedADL
-      })
-      setAiSuggestions(result.suggestedActivities)
-      toast({ title: "Sugestões Geradas", description: "O Arquiteto de Atividades propôs novas intervenções." })
-    } catch (error) {
-      toast({ title: "Erro na IA", description: "Não foi possível gerar sugestões agora.", variant: "destructive" })
-    } finally {
-      setIsLoadingAI(false)
-    }
-  }
-
-  const handleSaveActivity = async (activity: any) => {
+  const handleAddActivityManual = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
     if (!db) return
+
+    setIsSaving(true)
+    const formData = new FormData(e.currentTarget)
+    
+    const activityData = {
+      name: formData.get('name') as string,
+      description: formData.get('description') as string,
+      difficultyType: formData.get('type') as string,
+      status: 'pending',
+      createdAt: serverTimestamp()
+    }
+
     try {
-      await addDoc(collection(db, 'patients', id as string, 'suggestedActivities'), {
-        ...activity,
-        status: 'pending',
-        createdAt: serverTimestamp()
-      })
-      setAiSuggestions(prev => prev.filter(a => a.name !== activity.name))
-      toast({ title: "Atividade Adicionada", description: "O plano do paciente foi atualizado." })
+      await addDoc(collection(db, 'patients', id as string, 'suggestedActivities'), activityData)
+      toast({ title: "Atividade Adicionada", description: "O cronograma foi atualizado com sucesso." })
+      ;(e.target as HTMLFormElement).reset()
     } catch (err) {
       toast({ title: "Erro", description: "Falha ao salvar atividade.", variant: "destructive" })
+    } finally {
+      setIsSaving(false)
     }
   }
 
@@ -111,150 +95,115 @@ export default function PatientDetailPage() {
         </div>
       </div>
 
-      <Tabs defaultValue="assessment" className="space-y-6">
+      <Tabs defaultValue="plan" className="space-y-6">
         <TabsList className="bg-muted/50 p-1 w-full justify-start overflow-x-auto">
-          <TabsTrigger value="assessment" className="flex-1">Nova Avaliação</TabsTrigger>
-          <TabsTrigger value="plan" className="flex-1">Plano Atual</TabsTrigger>
+          <TabsTrigger value="plan" className="flex-1">Plano de Reabilitação</TabsTrigger>
+          <TabsTrigger value="add" className="flex-1">Nova Atividade</TabsTrigger>
           <TabsTrigger value="history" className="flex-1">Histórico</TabsTrigger>
         </TabsList>
-
-        <TabsContent value="assessment" className="space-y-8 animate-slide-up">
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            <Card className="border-none shadow-sm">
-              <CardHeader className="pb-2">
-                <div className="flex items-center gap-2 text-blue-600">
-                  <Accessibility className="h-5 w-5" />
-                  <CardTitle className="text-lg">Motora</CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4 pt-4">
-                {MOTOR_DIFFICULTIES.map(item => (
-                  <div key={item} className="flex items-center space-x-2">
-                    <Checkbox 
-                      id={`motor-${item}`} 
-                      checked={selectedMotor.includes(item)}
-                      onCheckedChange={(checked) => {
-                        setSelectedMotor(prev => checked ? [...prev, item] : prev.filter(i => i !== item))
-                      }}
-                    />
-                    <label htmlFor={`motor-${item}`} className="text-sm cursor-pointer">{item}</label>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-
-            <Card className="border-none shadow-sm">
-              <CardHeader className="pb-2">
-                <div className="flex items-center gap-2 text-purple-600">
-                  <Brain className="h-5 w-5" />
-                  <CardTitle className="text-lg">Cognitiva</CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4 pt-4">
-                {COGNITIVE_DIFFICULTIES.map(item => (
-                  <div key={item} className="flex items-center space-x-2">
-                    <Checkbox 
-                      id={`cog-${item}`} 
-                      checked={selectedCognitive.includes(item)}
-                      onCheckedChange={(checked) => {
-                        setSelectedCognitive(prev => checked ? [...prev, item] : prev.filter(i => i !== item))
-                      }}
-                    />
-                    <label htmlFor={`cog-${item}`} className="text-sm cursor-pointer">{item}</label>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-
-            <Card className="border-none shadow-sm sm:col-span-2 lg:col-span-1">
-              <CardHeader className="pb-2">
-                <div className="flex items-center gap-2 text-teal-600">
-                  <Home className="h-5 w-5" />
-                  <CardTitle className="text-lg">ADL</CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4 pt-4">
-                {ADL_DIFFICULTIES.map(item => (
-                  <div key={item} className="flex items-center space-x-2">
-                    <Checkbox 
-                      id={`adl-${item}`} 
-                      checked={selectedADL.includes(item)}
-                      onCheckedChange={(checked) => {
-                        setSelectedADL(prev => checked ? [...prev, item] : prev.filter(i => i !== item))
-                      }}
-                    />
-                    <label htmlFor={`adl-${item}`} className="text-sm cursor-pointer">{item}</label>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="flex justify-center">
-            <Button 
-              size="lg" 
-              className="gap-2 w-full max-w-md h-12 bg-secondary hover:bg-secondary/90" 
-              onClick={handleGeneratePlan}
-              disabled={isLoadingAI}
-            >
-              {isLoadingAI ? <Loader2 className="animate-spin" /> : <Sparkles className="h-5 w-5" />}
-              {isLoadingAI ? "Processando..." : "Gerar Estratégia com IA"}
-            </Button>
-          </div>
-
-          {aiSuggestions.length > 0 && (
-            <div className="space-y-4 pt-6">
-              <h2 className="text-xl font-bold flex items-center gap-2">
-                <Sparkles className="text-secondary h-5 w-5" />
-                Sugestões do Arquiteto
-              </h2>
-              <div className="grid sm:grid-cols-2 gap-4">
-                {aiSuggestions.map((act, i) => (
-                  <Card key={i} className="border-l-4 border-l-secondary shadow-sm">
-                    <CardHeader className="pb-2 flex flex-row items-start justify-between">
-                      <CardTitle className="text-base">{act.name}</CardTitle>
-                      <Badge variant="outline" className="capitalize text-[10px]">{act.difficultyType}</Badge>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="text-xs text-muted-foreground mb-4">{act.description}</p>
-                      <Button size="sm" variant="secondary" onClick={() => handleSaveActivity(act)} className="w-full">
-                        Adicionar ao Prontuário
-                      </Button>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </div>
-          )}
-        </TabsContent>
 
         <TabsContent value="plan" className="animate-slide-up">
           <Card className="border-none shadow-sm">
             <CardHeader>
-              <CardTitle>Plano de Reabilitação Vigente</CardTitle>
-              <CardDescription>Atividades ativas no cronograma.</CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Atividades em Execução</CardTitle>
+                  <CardDescription>Cronograma vigente para o paciente.</CardDescription>
+                </div>
+                <ClipboardList className="text-muted-foreground h-5 w-5" />
+              </div>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
                 {loadingActivities ? <Loader2 className="animate-spin mx-auto" /> : activities?.length === 0 ? (
-                  <p className="text-center text-muted-foreground py-10">Nenhuma atividade ativa. Gere um plano acima.</p>
+                  <div className="text-center py-12 border-2 border-dashed rounded-xl">
+                    <p className="text-muted-foreground">Nenhuma atividade ativa no momento.</p>
+                    <Button variant="link" asChild className="mt-2">
+                      <TabsTrigger value="add" className="cursor-pointer">Adicionar primeira atividade</TabsTrigger>
+                    </Button>
+                  </div>
                 ) : activities?.map((activity: any) => (
-                  <div key={activity.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/10 transition-colors">
+                  <div key={activity.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/5 transition-colors">
                     <div className="flex gap-4 items-start">
                       <div className={`p-2 rounded-lg ${activity.difficultyType === 'motor' ? 'bg-blue-100 text-blue-600' : activity.difficultyType === 'cognitive' ? 'bg-purple-100 text-purple-600' : 'bg-teal-100 text-teal-600'}`}>
                         {activity.difficultyType === 'motor' ? <Accessibility className="h-5 w-5" /> : activity.difficultyType === 'cognitive' ? <Brain className="h-5 w-5" /> : <Home className="h-5 w-5" />}
                       </div>
                       <div>
-                        <h4 className="font-semibold text-sm">{activity.name}</h4>
-                        <p className="text-xs text-muted-foreground line-clamp-2">{activity.description}</p>
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-semibold text-sm">{activity.name}</h4>
+                          <Badge variant="outline" className="text-[10px] capitalize">{activity.difficultyType}</Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground line-clamp-2 mt-1">{activity.description}</p>
                       </div>
                     </div>
-                    <Button variant="ghost" size="icon" onClick={() => handleDeleteActivity(activity.id)} className="text-red-500">
+                    <Button variant="ghost" size="icon" onClick={() => handleDeleteActivity(activity.id)} className="text-red-500 hover:text-red-700 hover:bg-red-50">
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
                 ))}
               </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="add" className="animate-slide-up">
+          <Card className="border-none shadow-sm max-w-2xl mx-auto">
+            <CardHeader>
+              <CardTitle>Prescrever Nova Atividade</CardTitle>
+              <CardDescription>Defina manualmente os detalhes da intervenção terapêutica.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleAddActivityManual} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name">Nome da Atividade</Label>
+                  <Input id="name" name="name" placeholder="Ex: Treino de Marcha Lateral" required />
+                </div>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="type">Tipo de Foco</Label>
+                    <Select name="type" required defaultValue="motor">
+                      <SelectTrigger id="type">
+                        <SelectValue placeholder="Selecione o tipo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="motor">Motora</SelectItem>
+                        <SelectItem value="cognitive">Cognitiva</SelectItem>
+                        <SelectItem value="dailyActivity">Atividade Diária (ADL)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="description">Instruções e Objetivos</Label>
+                  <Textarea 
+                    id="description" 
+                    name="description" 
+                    placeholder="Descreva detalhadamente como a atividade deve ser realizada e quais os objetivos clínicos." 
+                    className="min-h-[120px]"
+                    required 
+                  />
+                </div>
+
+                <Button type="submit" className="w-full gap-2" disabled={isSaving}>
+                  {isSaving ? <Loader2 className="animate-spin" /> : <PlusCircle className="h-4 w-4" />}
+                  Salvar no Prontuário
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="history" className="animate-slide-up">
+          <Card className="border-none shadow-sm">
+            <CardHeader>
+              <CardTitle>Histórico Clínico</CardTitle>
+              <CardDescription>Registros de avaliações e evoluções anteriores.</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col items-center justify-center py-10 text-muted-foreground">
+              <ClipboardList className="h-12 w-12 opacity-20 mb-4" />
+              <p>O histórico de evolução será implementado em breve.</p>
             </CardContent>
           </Card>
         </TabsContent>
