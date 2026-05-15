@@ -23,7 +23,7 @@
     --border: 210 10% 88%;
     --input: 210 10% 88%;
     --ring: 221 60% 45%;
-    --radius: 0.75rem;
+    --radius: 0.85rem;
     --sidebar-background: 222 47% 11%;
     --sidebar-foreground: 210 20% 98%;
     --sidebar-primary: 221 60% 45%;
@@ -46,24 +46,31 @@
 
 /* Custom Utilities */
 .no-scrollbar::-webkit-scrollbar {
-  display: none;
+  display: none !important;
 }
 .no-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
 }
 
 .animate-slide-up {
-  animation: slide-up 0.4s ease-out;
+  animation: slide-up 0.5s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes slide-up {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(20px);
   }
   to {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+/* Force hide scrollbars in specific containers */
+[data-sidebar="content"], 
+[role="main"],
+.tabs-content-container {
+  @apply no-scrollbar;
 }
