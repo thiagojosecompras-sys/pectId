@@ -17,7 +17,7 @@
     },
     "Activity": {
       "title": "Activity",
-      "description": "Atividade de reabilitação sugerida pela IA ou terapeuta",
+      "description": "Atividade de reabilitação sugerida ou em execução",
       "type": "object",
       "properties": {
         "name": { "type": "string" },
@@ -25,6 +25,16 @@
         "difficultyType": { "type": "string", "enum": ["motor", "cognitive", "dailyActivity"] },
         "status": { "type": "string", "enum": ["pending", "completed", "skipped"] },
         "createdAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Evolution": {
+      "title": "Evolution",
+      "description": "Registro de evolução clínica (histórico de consultas)",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string", "format": "date" },
+        "note": { "type": "string" },
+        "professional": { "type": "string" }
       }
     }
   },
@@ -38,7 +48,11 @@
     },
     "/patients/{patientId}/suggestedActivities/{activityId}": {
       "schema": "#/backend/entities/Activity",
-      "description": "Atividades recomendadas para o paciente"
+      "description": "Atividades recomendadas"
+    },
+    "/patients/{patientId}/evolutions/{evolutionId}": {
+      "schema": "#/backend/entities/Evolution",
+      "description": "Histórico de evolução clínica"
     }
   }
 }

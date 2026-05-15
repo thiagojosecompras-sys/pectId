@@ -19,12 +19,14 @@ import {
   Loader2,
   Trash2,
   PlusCircle,
-  ClipboardList
+  ClipboardList,
+  CalendarDays,
+  UserRound
 } from "lucide-react"
 import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
 import { useFirestore, useDoc, useCollection } from "@/firebase"
-import { doc, collection, addDoc, serverTimestamp, deleteDoc } from "firebase/firestore"
+import { doc, collection, addDoc, serverTimestamp, deleteDoc, query, orderBy } from "firebase/firestore"
 import { errorEmitter } from "@/firebase/error-emitter"
 import { FirestorePermissionError } from "@/firebase/errors"
 
@@ -41,6 +43,12 @@ export default function PatientDetailPage() {
   
   const activitiesRef = useMemo(() => db ? collection(db, 'patients', id as string, 'suggestedActivities') : null, [db, id])
   const { data: activities, loading: loadingActivities } = useCollection(activitiesRef)
+
+  const evolutionsQuery = useMemo(() => {
+    if (!db) return null;
+    return query(collection(db, 'patients', id as string, 'evolutions'), orderBy('date', 'desc'));
+  }, [db, id])
+  const { data: evolutions, loading: loadingEvolutions } = useCollection(evolutionsQuery)
 
   const handleAddActivityManual = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -61,7 +69,7 @@ export default function PatientDetailPage() {
     
     addDoc(activitiesCollectionRef, activityData)
       .then(() => {
-        toast({ title: "Atividade Adicionada", description: "O cronograma foi atualizado com sucesso." })
+        toast({ title: "Atividade Adicionada", description: "O cronograma foi atualizado." })
         ;(e.target as HTMLFormElement).reset()
         setActiveTab("plan")
       })
@@ -84,7 +92,7 @@ export default function PatientDetailPage() {
     
     deleteDoc(activityDocRef)
       .then(() => {
-        toast({ title: "Removido", description: "Atividade removida do cronograma." })
+        toast({ title: "Removido", description: "Atividade removida." })
       })
       .catch(async (serverError) => {
         const permissionError = new FirestorePermissionError({
@@ -95,70 +103,95 @@ export default function PatientDetailPage() {
       })
   }
 
-  if (!patient) return <div className="p-10 text-center"><Loader2 className="animate-spin mx-auto" /></div>
+  if (!patient) return <div className="p-10 text-center"><Loader2 className="animate-spin mx-auto text-primary" /></div>
 
   return (
     <div className="space-y-6 pb-20">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" asChild>
-          <Link href="/patients"><ChevronLeft /></Link>
-        </Button>
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">{patient.name}</h1>
-          <div className="flex flex-wrap items-center gap-2 mt-1">
-            <Badge variant="secondary">ID: {patient.clinicalId}</Badge>
-            <Badge variant="outline">{patient.age} anos</Badge>
-            <Badge className={patient.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}>
-              {patient.status === 'active' ? 'Ativo' : 'Crítico'}
-            </Badge>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="icon" asChild className="shrink-0">
+            <Link href="/patients"><ChevronLeft /></Link>
+          </Button>
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold truncate">{patient.name}</h1>
+            <div className="flex flex-wrap items-center gap-2 mt-1">
+              <Badge variant="secondary" className="text-[10px] sm:text-xs">ID: {patient.clinicalId}</Badge>
+              <Badge variant="outline" className="text-[10px] sm:text-xs">{patient.age} anos</Badge>
+              <Badge className={patient.status === 'active' ? 'bg-green-100 text-green-700 hover:bg-green-100' : 'bg-red-100 text-red-700 hover:bg-red-100'}>
+                {patient.status === 'active' ? 'Ativo' : 'Crítico'}
+              </Badge>
+            </div>
           </div>
         </div>
+        <Button size="sm" variant="outline" className="sm:w-auto w-full">Exportar PDF</Button>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="bg-muted/50 p-1 w-full justify-start overflow-x-auto no-scrollbar">
-          <TabsTrigger value="plan" className="flex-1 whitespace-nowrap">Plano de Reabilitação</TabsTrigger>
-          <TabsTrigger value="add" className="flex-1 whitespace-nowrap">Nova Atividade</TabsTrigger>
-          <TabsTrigger value="history" className="flex-1 whitespace-nowrap">Histórico</TabsTrigger>
+        <TabsList className="bg-muted/50 p-1 w-full flex overflow-x-auto no-scrollbar justify-start sm:justify-center">
+          <TabsTrigger value="plan" className="flex-1 min-w-[100px]">Plano</TabsTrigger>
+          <TabsTrigger value="history" className="flex-1 min-w-[100px]">Histórico</TabsTrigger>
+          <TabsTrigger value="add" className="flex-1 min-w-[100px]">Nova Ação</TabsTrigger>
         </TabsList>
 
         <TabsContent value="plan" className="animate-slide-up">
-          <Card className="border-none shadow-sm">
-            <CardHeader className="px-4 sm:px-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-xl">Atividades em Execução</CardTitle>
-                  <CardDescription>Cronograma vigente para o paciente.</CardDescription>
+          <div className="grid gap-6">
+            <Card className="border-none shadow-sm">
+              <CardHeader className="px-4 py-4 sm:p-6">
+                <CardTitle className="text-lg">Cronograma de Reabilitação</CardTitle>
+              </CardHeader>
+              <CardContent className="px-4 sm:px-6">
+                <div className="space-y-3">
+                  {loadingActivities ? <Loader2 className="animate-spin mx-auto" /> : activities?.length === 0 ? (
+                    <div className="text-center py-10 border-2 border-dashed rounded-xl">
+                      <p className="text-muted-foreground text-sm">Nenhuma atividade ativa.</p>
+                    </div>
+                  ) : activities?.map((activity: any) => (
+                    <div key={activity.id} className="flex items-start justify-between p-3 border rounded-lg bg-card/50 gap-3">
+                      <div className="flex gap-3 items-start min-w-0">
+                        <div className={`p-2 rounded-lg shrink-0 ${activity.difficultyType === 'motor' ? 'bg-blue-100 text-blue-600' : activity.difficultyType === 'cognitive' ? 'bg-purple-100 text-purple-600' : 'bg-teal-100 text-teal-600'}`}>
+                          {activity.difficultyType === 'motor' ? <Accessibility className="h-4 w-4" /> : activity.difficultyType === 'cognitive' ? <Brain className="h-4 w-4" /> : <Home className="h-4 w-4" />}
+                        </div>
+                        <div className="min-w-0">
+                          <h4 className="font-semibold text-sm leading-tight mb-1">{activity.name}</h4>
+                          <p className="text-xs text-muted-foreground line-clamp-2">{activity.description}</p>
+                        </div>
+                      </div>
+                      <Button variant="ghost" size="icon" onClick={() => handleDeleteActivity(activity.id)} className="text-muted-foreground hover:text-red-600 shrink-0 h-8 w-8">
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
                 </div>
-                <ClipboardList className="text-muted-foreground h-5 w-5 hidden sm:block" />
-              </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="history" className="animate-slide-up">
+          <Card className="border-none shadow-sm">
+            <CardHeader className="px-4 py-4 sm:p-6">
+              <CardTitle className="text-lg">Evolução Clínica</CardTitle>
+              <CardDescription>Histórico de atendimentos e observações profissionais.</CardDescription>
             </CardHeader>
             <CardContent className="px-4 sm:px-6">
-              <div className="space-y-4">
-                {loadingActivities ? <Loader2 className="animate-spin mx-auto" /> : activities?.length === 0 ? (
-                  <div className="text-center py-12 border-2 border-dashed rounded-xl">
-                    <p className="text-muted-foreground">Nenhuma atividade ativa no momento.</p>
-                    <Button variant="link" onClick={() => setActiveTab("add")} className="mt-2">
-                      Adicionar primeira atividade
-                    </Button>
-                  </div>
-                ) : activities?.map((activity: any) => (
-                  <div key={activity.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/5 transition-colors gap-4">
-                    <div className="flex gap-4 items-start min-w-0">
-                      <div className={`p-2 rounded-lg shrink-0 ${activity.difficultyType === 'motor' ? 'bg-blue-100 text-blue-600' : activity.difficultyType === 'cognitive' ? 'bg-purple-100 text-purple-600' : 'bg-teal-100 text-teal-600'}`}>
-                        {activity.difficultyType === 'motor' ? <Accessibility className="h-5 w-5" /> : activity.difficultyType === 'cognitive' ? <Brain className="h-5 w-5" /> : <Home className="h-5 w-5" />}
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h4 className="font-semibold text-sm truncate max-w-[150px] sm:max-w-none">{activity.name}</h4>
-                          <Badge variant="outline" className="text-[10px] capitalize shrink-0">{activity.difficultyType}</Badge>
-                        </div>
-                        <p className="text-xs text-muted-foreground line-clamp-2 mt-1">{activity.description}</p>
-                      </div>
+              <div className="relative space-y-6 before:absolute before:inset-0 before:ml-5 before:-translate-x-px before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-slate-200 before:to-transparent">
+                {loadingEvolutions ? <Loader2 className="animate-spin mx-auto" /> : evolutions?.length === 0 ? (
+                   <p className="text-center py-10 text-muted-foreground text-sm">Sem histórico registrado.</p>
+                ) : evolutions?.map((ev: any) => (
+                  <div key={ev.id} className="relative flex items-start gap-4 sm:gap-6 pl-12">
+                    <div className="absolute left-0 mt-1.5 h-10 w-10 flex items-center justify-center rounded-full bg-white border-2 border-primary shadow-sm z-10">
+                      <CalendarDays className="h-5 w-5 text-primary" />
                     </div>
-                    <Button variant="ghost" size="icon" onClick={() => handleDeleteActivity(activity.id)} className="text-red-500 hover:text-red-700 hover:bg-red-50 shrink-0">
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    <div className="flex-1 bg-muted/30 p-4 rounded-xl border border-muted-foreground/10">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-2 gap-1">
+                        <time className="text-xs font-bold text-primary">{new Date(ev.date).toLocaleDateString('pt-BR')}</time>
+                        <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                          <UserRound className="h-3 w-3" />
+                          <span>{ev.professional}</span>
+                        </div>
+                      </div>
+                      <p className="text-sm leading-relaxed text-foreground/80">{ev.note}</p>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -168,40 +201,37 @@ export default function PatientDetailPage() {
 
         <TabsContent value="add" className="animate-slide-up">
           <Card className="border-none shadow-sm max-w-2xl mx-auto">
-            <CardHeader>
-              <CardTitle>Prescrever Nova Atividade</CardTitle>
-              <CardDescription>Defina manualmente os detalhes da intervenção terapêutica.</CardDescription>
+            <CardHeader className="px-4 py-4 sm:p-6">
+              <CardTitle className="text-lg">Prescrever Atividade</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="px-4 sm:px-6">
               <form onSubmit={handleAddActivityManual} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="name">Nome da Atividade</Label>
-                  <Input id="name" name="name" placeholder="Ex: Treino de Marcha Lateral" required />
+                  <Label htmlFor="name" className="text-xs sm:text-sm">Nome da Atividade</Label>
+                  <Input id="name" name="name" placeholder="Ex: Exercício de Propriocepção" required />
                 </div>
                 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="type">Tipo de Foco</Label>
-                    <Select name="type" required defaultValue="motor">
-                      <SelectTrigger id="type">
-                        <SelectValue placeholder="Selecione o tipo" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="motor">Motora</SelectItem>
-                        <SelectItem value="cognitive">Cognitiva</SelectItem>
-                        <SelectItem value="dailyActivity">Atividade Diária (ADL)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                <div className="space-y-2">
+                  <Label htmlFor="type" className="text-xs sm:text-sm">Área de Foco</Label>
+                  <Select name="type" required defaultValue="motor">
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="motor">Fisioterapia Motora</SelectItem>
+                      <SelectItem value="cognitive">Terapia Cognitiva</SelectItem>
+                      <SelectItem value="dailyActivity">Atividade de Vida Diária</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="description">Instruções e Objetivos</Label>
+                  <Label htmlFor="description" className="text-xs sm:text-sm">Descrição Técnica</Label>
                   <Textarea 
                     id="description" 
                     name="description" 
-                    placeholder="Descreva detalhadamente como a atividade deve ser realizada e quais os objetivos clínicos." 
-                    className="min-h-[120px]"
+                    placeholder="Descreva a conduta..." 
+                    className="min-h-[100px]"
                     required 
                   />
                 </div>
@@ -211,19 +241,6 @@ export default function PatientDetailPage() {
                   Salvar no Prontuário
                 </Button>
               </form>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="history" className="animate-slide-up">
-          <Card className="border-none shadow-sm">
-            <CardHeader>
-              <CardTitle>Histórico Clínico</CardTitle>
-              <CardDescription>Registros de avaliações e evoluções anteriores.</CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-col items-center justify-center py-10 text-muted-foreground text-center px-4">
-              <ClipboardList className="h-12 w-12 opacity-20 mb-4" />
-              <p>O histórico de evolução será implementado em breve para acompanhamento longitudinal.</p>
             </CardContent>
           </Card>
         </TabsContent>
