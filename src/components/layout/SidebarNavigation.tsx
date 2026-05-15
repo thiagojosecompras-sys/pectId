@@ -9,7 +9,8 @@ import {
   LogOut,
   Brain,
   Accessibility,
-  Home
+  Home,
+  ShieldAlert
 } from "lucide-react"
 import {
   Sidebar,
@@ -26,26 +27,26 @@ import {
 } from "@/components/ui/sidebar"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 
 const items = [
   {
-    title: "Painel Geral",
+    title: "Início / Dashboard",
     url: "/dashboard",
     icon: LayoutDashboard,
   },
   {
-    title: "Pacientes",
+    title: "Gestão de Pacientes",
     url: "/patients",
     icon: Users,
   },
   {
-    title: "Cronograma",
+    title: "Cronograma Geral",
     url: "/timeline",
     icon: Calendar,
   },
   {
-    title: "Métricas",
+    title: "Métricas Clínicas",
     url: "/analytics",
     icon: Activity,
   },
@@ -53,28 +54,40 @@ const items = [
 
 export function SidebarNavigation() {
   const pathname = usePathname()
+  const router = useRouter()
+
+  const handleLogout = () => {
+    router.push("/")
+  }
 
   return (
-    <Sidebar>
-      <SidebarHeader className="p-4 border-b border-sidebar-border">
+    <Sidebar className="border-r-0">
+      <SidebarHeader className="p-6 border-b border-sidebar-border">
         <div className="flex items-center gap-3 px-2">
-          <div className="bg-primary p-2 rounded-lg">
+          <div className="bg-primary p-2.5 rounded-xl shadow-lg shadow-primary/20">
             <Activity className="h-6 w-6 text-primary-foreground" />
           </div>
-          <span className="text-xl font-bold tracking-tight">PCTE.ID</span>
+          <div className="flex flex-col">
+            <span className="text-xl font-black tracking-tight leading-none">PCTE.ID</span>
+            <span className="text-[10px] text-sidebar-foreground/50 font-bold uppercase tracking-widest mt-1">Reabilitação</span>
+          </div>
         </div>
       </SidebarHeader>
-      <SidebarContent>
+      <SidebarContent className="px-2 py-4">
         <SidebarGroup>
-          <SidebarGroupLabel>Menu Principal</SidebarGroupLabel>
+          <SidebarGroupLabel className="px-4 text-[10px] font-black uppercase tracking-widest opacity-50 mb-2">Operacional</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {items.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild isActive={pathname === item.url}>
+                  <SidebarMenuButton 
+                    asChild 
+                    isActive={pathname === item.url}
+                    className="h-10 px-4 rounded-xl transition-all duration-200"
+                  >
                     <Link href={item.url}>
-                      <item.icon />
-                      <span>{item.title}</span>
+                      <item.icon className="h-4 w-4" />
+                      <span className="font-medium">{item.title}</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -83,50 +96,53 @@ export function SidebarNavigation() {
           </SidebarGroupContent>
         </SidebarGroup>
         
-        <SidebarSeparator />
+        <SidebarSeparator className="my-4 opacity-10" />
         
         <SidebarGroup>
-          <SidebarGroupLabel>Especialidades</SidebarGroupLabel>
+          <SidebarGroupLabel className="px-4 text-[10px] font-black uppercase tracking-widest opacity-50 mb-2">Especialidades</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
-                <SidebarMenuButton>
-                  <Accessibility className="text-blue-400" />
-                  <span>Motora</span>
+                <SidebarMenuButton className="h-10 px-4 rounded-xl">
+                  <Accessibility className="h-4 w-4 text-emerald-400" />
+                  <span className="font-medium">Fisioterapia</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
-                <SidebarMenuButton>
-                  <Brain className="text-purple-400" />
-                  <span>Cognitiva</span>
+                <SidebarMenuButton className="h-10 px-4 rounded-xl">
+                  <Brain className="h-4 w-4 text-purple-400" />
+                  <span className="font-medium">Neurocognição</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
-                <SidebarMenuButton>
-                  <Home className="text-teal-400" />
-                  <span>Atividades Diárias</span>
+                <SidebarMenuButton className="h-10 px-4 rounded-xl">
+                  <Home className="h-4 w-4 text-amber-400" />
+                  <span className="font-medium">Terapia ADL</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter className="p-4">
-        <div className="flex items-center gap-3 px-2 mb-4">
-          <Avatar className="h-9 w-9 border-2 border-primary/20">
+      <SidebarFooter className="p-6 bg-sidebar-accent/30">
+        <div className="flex items-center gap-3 px-2 mb-6 group cursor-default">
+          <Avatar className="h-10 w-10 border-2 border-primary/30 transition-transform group-hover:scale-110">
             <AvatarImage src="https://picsum.photos/seed/doc1/200/200" />
-            <AvatarFallback>DR</AvatarFallback>
+            <AvatarFallback className="bg-primary/20 text-primary-foreground font-bold">DR</AvatarFallback>
           </Avatar>
-          <div className="flex flex-col">
-            <span className="text-sm font-medium">Dr. Ricardo Silva</span>
-            <span className="text-xs text-sidebar-foreground/60">Fisioterapeuta</span>
+          <div className="flex flex-col min-w-0">
+            <span className="text-sm font-bold truncate">Dr. Ricardo Silva</span>
+            <span className="text-[10px] text-sidebar-foreground/40 font-bold uppercase">Gestor Clínico</span>
           </div>
         </div>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton className="text-red-400 hover:text-red-300 hover:bg-red-400/10">
-              <LogOut />
-              <span>Sair do Sistema</span>
+            <SidebarMenuButton 
+              onClick={handleLogout}
+              className="text-red-400 hover:text-white hover:bg-red-500/80 h-10 px-4 rounded-xl transition-all"
+            >
+              <LogOut className="h-4 w-4" />
+              <span className="font-bold">Sair do Sistema</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

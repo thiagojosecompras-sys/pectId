@@ -1,4 +1,3 @@
-
 import { doc, setDoc, collection, getDocs, Firestore, serverTimestamp, query, limit } from 'firebase/firestore';
 
 export const demoPatients = [
@@ -97,6 +96,7 @@ export async function seedDemoData(db: Firestore) {
   const patientsColl = collection(db, 'patients');
   const patientsSnap = await getDocs(query(patientsColl, limit(1)));
   
+  // Só popula se estiver vazio para evitar duplicidade de logs
   if (!patientsSnap.empty) {
     return;
   }
@@ -110,7 +110,7 @@ export async function seedDemoData(db: Firestore) {
       createdAt: serverTimestamp() 
     });
 
-    // 2. Criar Evoluções (Coleção Flat para histórico)
+    // 2. Criar Evoluções (Coleção Flat)
     const evolutionsColl = collection(db, 'evolutions');
     for (const ev of evolutions) {
       await setDoc(doc(evolutionsColl), { 
@@ -120,7 +120,7 @@ export async function seedDemoData(db: Firestore) {
       });
     }
 
-    // 3. Criar Atividades (Coleção Flat para cronograma)
+    // 3. Criar Atividades (Coleção Flat)
     const activityColl = collection(db, 'activities');
     for (const act of activities) {
       await setDoc(doc(activityColl), { 

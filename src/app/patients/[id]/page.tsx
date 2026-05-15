@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
@@ -20,7 +19,9 @@ import {
   Trash2,
   PlusCircle,
   CalendarDays,
-  UserRound
+  UserRound,
+  History,
+  FileText
 } from "lucide-react"
 import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
@@ -47,14 +48,14 @@ export default function PatientDetailPage() {
   const patientRef = useMemoFirebase(() => db && id ? doc(db, 'patients', id) : null, [db, id])
   const { data: patient, loading: loadingPatient } = useDoc(patientRef)
   
-  // Consulta de Atividades (Relacionamento via patientId em coleção flat)
+  // Consulta de Atividades (Relacionamento via patientId)
   const activitiesQuery = useMemoFirebase(() => {
     if (!db || !id) return null;
     return query(collection(db, 'activities'), where('patientId', '==', id));
   }, [db, id]);
   const { data: activities, loading: loadingActivities } = useCollection(activitiesQuery)
 
-  // Consulta de Evoluções (Relacionamento via patientId em coleção flat)
+  // Consulta de Evoluções (Relacionamento via patientId)
   const evolutionsQuery = useMemoFirebase(() => {
     if (!db || !id) return null;
     return query(collection(db, 'evolutions'), where('patientId', '==', id));
@@ -63,7 +64,11 @@ export default function PatientDetailPage() {
 
   const sortedEvolutions = useMemo(() => {
     if (!evolutions) return [];
-    return [...evolutions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    return [...evolutions].sort((a, b) => {
+      const dateA = a.date ? new Date(a.date).getTime() : 0;
+      const dateB = b.date ? new Date(b.date).getTime() : 0;
+      return dateB - dateA;
+    });
   }, [evolutions]);
 
   const handleAddActivityManual = (e: React.FormEvent<HTMLFormElement>) => {
@@ -82,9 +87,9 @@ export default function PatientDetailPage() {
       createdAt: serverTimestamp()
     }
 
-    const activitiesCollectionRef = collection(db, 'activities')
+    const activitiesColl = collection(db, 'activities')
     
-    addDoc(activitiesCollectionRef, activityData)
+    addDoc(activitiesColl, activityData)
       .then(() => {
         toast({ title: "Atividade Adicionada", description: "O cronograma foi atualizado." })
         ;(e.target as HTMLFormElement).reset()
@@ -92,7 +97,7 @@ export default function PatientDetailPage() {
       })
       .catch(async (serverError) => {
         const permissionError = new FirestorePermissionError({
-          path: activitiesCollectionRef.path,
+          path: activitiesColl.path,
           operation: 'create',
           requestResourceData: activityData,
         });
@@ -105,119 +110,132 @@ export default function PatientDetailPage() {
 
   const handleDeleteActivity = (activityId: string) => {
     if (!db) return
-    const activityDocRef = doc(db, 'activities', activityId)
-    
-    deleteDoc(activityDocRef)
-      .then(() => {
-        toast({ title: "Removido", description: "Atividade removida." })
-      })
-      .catch(async (serverError) => {
-        const permissionError = new FirestorePermissionError({
-          path: activityDocRef.path,
-          operation: 'delete',
-        });
-        errorEmitter.emit('permission-error', permissionError);
-      })
+    const docRef = doc(db, 'activities', activityId)
+    deleteDoc(docRef).catch(async (serverError) => {
+      const permissionError = new FirestorePermissionError({
+        path: docRef.path,
+        operation: 'delete',
+      });
+      errorEmitter.emit('permission-error', permissionError);
+    })
   }
 
   if (!mounted) return null
-  if (loadingPatient) return <div className="p-10 text-center"><Loader2 className="animate-spin mx-auto text-primary" /></div>
-  if (!patient) return <div className="p-10 text-center">Paciente não encontrado.</div>
+  if (loadingPatient) return <div className="p-20 flex flex-col items-center justify-center gap-4"><Loader2 className="animate-spin h-10 w-10 text-primary" /><p className="text-muted-foreground animate-pulse">Carregando prontuário...</p></div>
+  if (!patient) return <div className="p-20 text-center"><p className="text-lg font-medium">Paciente não localizado.</p><Button asChild variant="link" className="mt-2"><Link href="/patients">Voltar para a lista</Link></Button></div>
 
   return (
-    <div className="space-y-6 pb-20">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="space-y-6 pb-24 max-w-5xl mx-auto">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" asChild className="shrink-0">
-            <Link href="/patients"><ChevronLeft /></Link>
+          <Button variant="ghost" size="icon" asChild className="shrink-0 hover:bg-slate-100 rounded-full">
+            <Link href="/patients"><ChevronLeft className="h-5 w-5" /></Link>
           </Button>
           <div className="min-w-0">
-            <h1 className="text-xl sm:text-2xl font-bold truncate">{patient?.name}</h1>
-            <div className="flex flex-wrap items-center gap-2 mt-1">
-              <Badge variant="secondary" className="text-[10px] sm:text-xs">ID: {patient?.clinicalId}</Badge>
-              <Badge variant="outline" className="text-[10px] sm:text-xs">{patient?.age} anos</Badge>
-              <Badge className={patient?.status === 'active' ? 'bg-green-100 text-green-700 hover:bg-green-100' : 'bg-red-100 text-red-700 hover:bg-red-100'}>
-                {patient?.status === 'active' ? 'Ativo' : 'Crítico'}
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight truncate">{patient?.name}</h1>
+            <div className="flex flex-wrap items-center gap-2 mt-1.5">
+              <Badge variant="secondary" className="px-2 py-0.5 text-[10px] font-mono bg-slate-100">ID: {patient?.clinicalId}</Badge>
+              <Badge variant="outline" className="px-2 py-0.5 text-[10px]">{patient?.age} anos</Badge>
+              <Badge className={patient?.status === 'active' ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100' : 'bg-red-100 text-red-700 hover:bg-red-100'}>
+                {patient?.status === 'active' ? 'Em Reabilitação' : 'Estado Crítico'}
               </Badge>
             </div>
           </div>
         </div>
-        <Button size="sm" variant="outline" className="sm:w-auto w-full">Exportar PDF</Button>
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <Button size="sm" variant="outline" className="flex-1 sm:flex-none gap-2 shadow-sm">
+            <FileText className="h-4 w-4" /> Relatório
+          </Button>
+        </div>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="bg-muted/50 p-1 w-full flex overflow-x-auto no-scrollbar justify-start sm:justify-center">
-          <TabsTrigger value="plan" className="flex-1 min-w-[100px]">Plano</TabsTrigger>
-          <TabsTrigger value="history" className="flex-1 min-w-[100px]">Histórico</TabsTrigger>
-          <TabsTrigger value="add" className="flex-1 min-w-[100px]">Nova Ação</TabsTrigger>
+        <TabsList className="bg-slate-100/50 p-1.5 w-full flex overflow-x-auto no-scrollbar justify-start border border-slate-200/50 rounded-xl">
+          <TabsTrigger value="plan" className="flex-1 min-w-[120px] gap-2 py-2">
+            <History className="h-4 w-4" /> Plano
+          </TabsTrigger>
+          <TabsTrigger value="history" className="flex-1 min-w-[120px] gap-2 py-2">
+            <CalendarDays className="h-4 w-4" /> Evolução
+          </TabsTrigger>
+          <TabsTrigger value="add" className="flex-1 min-w-[120px] gap-2 py-2">
+            <PlusCircle className="h-4 w-4" /> Prescrever
+          </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="plan" className="animate-slide-up">
-          <div className="grid gap-6">
-            <Card className="border-none shadow-sm">
-              <CardHeader className="px-4 py-4 sm:p-6">
-                <CardTitle className="text-lg">Cronograma de Reabilitação</CardTitle>
-              </CardHeader>
-              <CardContent className="px-4 sm:px-6">
-                <div className="space-y-3">
-                  {loadingActivities ? (
-                    <div className="flex justify-center p-8"><Loader2 className="animate-spin text-primary" /></div>
-                  ) : activities?.length === 0 ? (
-                    <div className="text-center py-10 border-2 border-dashed rounded-xl">
-                      <p className="text-muted-foreground text-sm">Nenhuma atividade ativa.</p>
-                    </div>
-                  ) : activities?.map((activity: any) => (
-                    <div key={activity.id} className="flex items-start justify-between p-3 border rounded-lg bg-card/50 gap-3">
-                      <div className="flex gap-3 items-start min-w-0">
-                        <div className={`p-2 rounded-lg shrink-0 ${activity.difficultyType === 'motor' ? 'bg-blue-100 text-blue-600' : activity.difficultyType === 'cognitive' ? 'bg-purple-100 text-purple-600' : 'bg-teal-100 text-teal-600'}`}>
-                          {activity.difficultyType === 'motor' ? <Accessibility className="h-4 w-4" /> : activity.difficultyType === 'cognitive' ? <Brain className="h-4 w-4" /> : <Home className="h-4 w-4" />}
-                        </div>
-                        <div className="min-w-0">
-                          <h4 className="font-semibold text-sm leading-tight mb-1">{activity.name}</h4>
-                          <p className="text-xs text-muted-foreground line-clamp-2">{activity.description}</p>
-                        </div>
+        <TabsContent value="plan" className="animate-slide-up focus-visible:outline-none">
+          <Card className="border-none shadow-sm overflow-hidden">
+            <CardHeader className="bg-slate-50/50 border-b">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Accessibility className="h-5 w-5 text-primary" /> Cronograma Ativo
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0 sm:p-6">
+              <div className="divide-y sm:divide-y-0 sm:space-y-4">
+                {loadingActivities ? (
+                  <div className="flex justify-center p-12"><Loader2 className="animate-spin text-primary" /></div>
+                ) : activities?.length === 0 ? (
+                  <div className="text-center py-16 border-2 border-dashed rounded-2xl bg-slate-50/30 m-6">
+                    <p className="text-muted-foreground text-sm">Nenhum protocolo ativo para este paciente.</p>
+                  </div>
+                ) : activities?.map((activity: any) => (
+                  <div key={activity.id} className="flex items-start justify-between p-4 sm:p-5 sm:border sm:rounded-2xl bg-card hover:bg-slate-50/50 transition-colors gap-4">
+                    <div className="flex gap-4 items-start min-w-0">
+                      <div className={`p-2.5 rounded-xl shrink-0 ${
+                        activity.difficultyType === 'motor' ? 'bg-blue-100 text-blue-600' : 
+                        activity.difficultyType === 'cognitive' ? 'bg-purple-100 text-purple-600' : 
+                        'bg-teal-100 text-teal-600'
+                      }`}>
+                        {activity.difficultyType === 'motor' ? <Accessibility className="h-5 w-5" /> : 
+                         activity.difficultyType === 'cognitive' ? <Brain className="h-5 w-5" /> : 
+                         <Home className="h-5 w-5" />}
                       </div>
-                      <Button variant="ghost" size="icon" onClick={() => handleDeleteActivity(activity.id)} className="text-muted-foreground hover:text-red-600 shrink-0 h-8 w-8">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <div className="min-w-0">
+                        <h4 className="font-bold text-sm leading-tight mb-1">{activity.name}</h4>
+                        <p className="text-xs text-muted-foreground leading-relaxed sm:line-clamp-2">{activity.description}</p>
+                      </div>
                     </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+                    <Button variant="ghost" size="icon" onClick={() => handleDeleteActivity(activity.id)} className="text-muted-foreground hover:text-red-600 shrink-0 h-9 w-9 rounded-full">
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
 
-        <TabsContent value="history" className="animate-slide-up">
+        <TabsContent value="history" className="animate-slide-up focus-visible:outline-none">
           <Card className="border-none shadow-sm">
-            <CardHeader className="px-4 py-4 sm:p-6">
-              <CardTitle className="text-lg">Evolução Clínica</CardTitle>
-              <CardDescription>Histórico de atendimentos e observações profissionais.</CardDescription>
+            <CardHeader className="bg-slate-50/50 border-b">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <History className="h-5 w-5 text-primary" /> Histórico Longitudinal
+              </CardTitle>
+              <CardDescription>Registro cronológico de evoluções clínicas.</CardDescription>
             </CardHeader>
-            <CardContent className="px-4 sm:px-6">
-              <div className="relative space-y-6 before:absolute before:inset-0 before:ml-5 before:-translate-x-px before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-slate-200 before:to-transparent">
+            <CardContent className="px-4 py-8 sm:px-10">
+              <div className="relative space-y-10 before:absolute before:inset-0 before:ml-5 sm:before:ml-6 before:-translate-x-px before:h-full before:w-0.5 before:bg-slate-200">
                 {loadingEvolutions ? (
-                  <div className="flex justify-center p-8"><Loader2 className="animate-spin text-primary" /></div>
+                  <div className="flex justify-center p-12"><Loader2 className="animate-spin text-primary" /></div>
                 ) : sortedEvolutions.length === 0 ? (
-                   <div className="text-center py-10 border-2 border-dashed rounded-xl">
-                    <p className="text-muted-foreground text-sm">Sem histórico registrado.</p>
+                   <div className="text-center py-10">
+                    <p className="text-muted-foreground text-sm">Sem histórico clínico registrado.</p>
                    </div>
                 ) : sortedEvolutions.map((ev: any) => (
-                  <div key={ev.id} className="relative flex items-start gap-4 sm:gap-6 pl-12">
-                    <div className="absolute left-0 mt-1.5 h-10 w-10 flex items-center justify-center rounded-full bg-white border-2 border-primary shadow-sm z-10">
-                      <CalendarDays className="h-5 w-5 text-primary" />
+                  <div key={ev.id} className="relative flex items-start gap-4 sm:gap-8 pl-10 sm:pl-12">
+                    <div className="absolute left-0 mt-1 h-10 w-10 sm:h-12 sm:w-12 flex items-center justify-center rounded-full bg-white border-2 border-primary shadow-sm z-10 transition-transform hover:scale-110">
+                      <CalendarDays className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
                     </div>
-                    <div className="flex-1 bg-muted/30 p-4 rounded-xl border border-muted-foreground/10">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-2 gap-1">
-                        <time className="text-xs font-bold text-primary">
-                          {mounted ? new Date(ev.date).toLocaleDateString('pt-BR') : ev.date}
+                    <div className="flex-1 bg-white p-5 rounded-2xl border border-slate-100 shadow-sm hover:border-primary/20 transition-all">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3 gap-2">
+                        <time className="text-xs font-black uppercase tracking-wider text-primary">
+                          {mounted ? new Date(ev.date).toLocaleDateString('pt-BR', {day: '2-digit', month: 'long', year: 'numeric'}) : ev.date}
                         </time>
-                        <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                          <UserRound className="h-3 w-3" />
+                        <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
+                          <UserRound className="h-3.5 w-3.5" />
                           <span>{ev.professional}</span>
                         </div>
                       </div>
-                      <p className="text-sm leading-relaxed text-foreground/80">{ev.note}</p>
+                      <p className="text-sm leading-relaxed text-slate-700 whitespace-pre-wrap">{ev.note}</p>
                     </div>
                   </div>
                 ))}
@@ -226,46 +244,49 @@ export default function PatientDetailPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="add" className="animate-slide-up">
-          <Card className="border-none shadow-sm max-w-2xl mx-auto">
-            <CardHeader className="px-4 py-4 sm:p-6">
-              <CardTitle className="text-lg">Prescrever Atividade</CardTitle>
+        <TabsContent value="add" className="animate-slide-up focus-visible:outline-none">
+          <Card className="border-none shadow-sm max-w-2xl mx-auto overflow-hidden">
+            <CardHeader className="bg-slate-50/50 border-b">
+              <CardTitle className="text-lg">Prescrever Nova Conduta</CardTitle>
+              <CardDescription>Adicione uma atividade específica ao cronograma do paciente.</CardDescription>
             </CardHeader>
-            <CardContent className="px-4 sm:px-6">
-              <form onSubmit={handleAddActivityManual} className="space-y-4">
+            <CardContent className="p-6">
+              <form onSubmit={handleAddActivityManual} className="space-y-5">
                 <div className="space-y-2">
-                  <Label htmlFor="name" className="text-xs sm:text-sm">Nome da Atividade</Label>
-                  <Input id="name" name="name" placeholder="Ex: Exercício de Propriocepção" required />
+                  <Label htmlFor="name">Nome da Atividade</Label>
+                  <Input id="name" name="name" placeholder="Ex: Exercício de Propriocepção MMII" required className="rounded-xl h-11" />
                 </div>
                 
-                <div className="space-y-2">
-                  <Label htmlFor="type" className="text-xs sm:text-sm">Área de Foco</Label>
-                  <Select name="type" required defaultValue="motor">
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="motor">Fisioterapia Motora</SelectItem>
-                      <SelectItem value="cognitive">Terapia Cognitiva</SelectItem>
-                      <SelectItem value="dailyActivity">Atividade de Vida Diária</SelectItem>
-                    </SelectContent>
-                  </Select>
+                <div className="grid sm:grid-cols-1 gap-5">
+                  <div className="space-y-2">
+                    <Label htmlFor="type">Especialidade / Foco</Label>
+                    <Select name="type" required defaultValue="motor">
+                      <SelectTrigger className="rounded-xl h-11">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="motor">Fisioterapia Motora</SelectItem>
+                        <SelectItem value="cognitive">Terapia Cognitiva</SelectItem>
+                        <SelectItem value="dailyActivity">Atividades de Vida Diária (ADL)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="description" className="text-xs sm:text-sm">Descrição Técnica</Label>
+                  <Label htmlFor="description">Descrição e Orientações Técnicas</Label>
                   <Textarea 
                     id="description" 
                     name="description" 
-                    placeholder="Descreva a conduta..." 
-                    className="min-h-[100px]"
+                    placeholder="Descreva a série, repetições e observações..." 
+                    className="min-h-[140px] rounded-xl resize-none"
                     required 
                   />
                 </div>
 
-                <Button type="submit" className="w-full gap-2" disabled={isSaving}>
-                  {isSaving ? <Loader2 className="animate-spin h-4 w-4" /> : <PlusCircle className="h-4 w-4" />}
-                  Salvar no Prontuário
+                <Button type="submit" className="w-full h-12 rounded-xl gap-2 font-bold shadow-sm" disabled={isSaving}>
+                  {isSaving ? <Loader2 className="animate-spin h-5 w-5" /> : <PlusCircle className="h-5 w-5" />}
+                  Confirmar Prescrição
                 </Button>
               </form>
             </CardContent>

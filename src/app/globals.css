@@ -4,34 +4,34 @@
 
 @layer base {
   :root {
-    --background: 210 20% 97%;
+    --background: 210 20% 98%;
     --foreground: 221 40% 10%;
     --card: 0 0% 100%;
     --card-foreground: 221 40% 10%;
     --popover: 0 0% 100%;
     --popover-foreground: 221 40% 10%;
-    --primary: 221 60% 43%;
+    --primary: 221 60% 45%;
     --primary-foreground: 210 20% 98%;
-    --secondary: 187 68% 37%;
+    --secondary: 187 68% 40%;
     --secondary-foreground: 210 20% 98%;
-    --muted: 210 10% 90%;
+    --muted: 210 10% 92%;
     --muted-foreground: 221 20% 45%;
-    --accent: 187 68% 95%;
+    --accent: 187 68% 96%;
     --accent-foreground: 187 68% 20%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 20% 98%;
-    --border: 210 10% 85%;
-    --input: 210 10% 85%;
-    --ring: 221 60% 43%;
+    --border: 210 10% 88%;
+    --input: 210 10% 88%;
+    --ring: 221 60% 45%;
     --radius: 0.75rem;
-    --sidebar-background: 221 60% 20%;
-    --sidebar-foreground: 210 20% 95%;
-    --sidebar-primary: 221 60% 43%;
+    --sidebar-background: 222 47% 11%;
+    --sidebar-foreground: 210 20% 98%;
+    --sidebar-primary: 221 60% 45%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 221 60% 30%;
+    --sidebar-accent: 222 47% 20%;
     --sidebar-accent-foreground: 210 20% 98%;
-    --sidebar-border: 221 60% 25%;
-    --sidebar-ring: 221 60% 43%;
+    --sidebar-border: 222 47% 15%;
+    --sidebar-ring: 221 60% 45%;
   }
 }
 
@@ -40,7 +40,7 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground font-body;
+    @apply bg-background text-foreground font-body antialiased;
   }
 }
 
@@ -57,4 +57,13 @@
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+/* Custom scrollbar for mobile navigation tabs */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
