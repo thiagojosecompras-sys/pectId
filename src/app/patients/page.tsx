@@ -1,7 +1,7 @@
 
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -46,6 +46,7 @@ import { collection, addDoc, serverTimestamp } from "firebase/firestore"
 import { useToast } from "@/hooks/use-toast"
 import { errorEmitter } from "@/firebase/error-emitter"
 import { FirestorePermissionError } from "@/firebase/errors"
+import { seedDemoData } from "@/lib/demo-data"
 
 export default function PatientsPage() {
   const [searchTerm, setSearchTerm] = useState("")
@@ -56,6 +57,10 @@ export default function PatientsPage() {
   const db = useFirestore()
   const patientsQuery = useMemo(() => db ? collection(db, 'patients') : null, [db])
   const { data: patients, loading } = useCollection(patientsQuery)
+
+  useEffect(() => {
+    if (db) seedDemoData(db)
+  }, [db])
 
   const filteredPatients = patients?.filter((p: any) => 
     p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -220,7 +225,7 @@ export default function PatientsPage() {
                     </TableCell>
                   </TableRow>
                 ))}
-                {filteredPatients?.length === 0 && !loading && (
+                {(!filteredPatients || filteredPatients.length === 0) && !loading && (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
                       Nenhum paciente encontrado.
