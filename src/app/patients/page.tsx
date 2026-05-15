@@ -41,12 +41,8 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import Link from "next/link"
-import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
-import { collection, addDoc, serverTimestamp } from "firebase/firestore"
+import { INITIAL_PATIENTS, Patient } from "@/lib/static-data"
 import { useToast } from "@/hooks/use-toast"
-import { errorEmitter } from "@/firebase/error-emitter"
-import { FirestorePermissionError } from "@/firebase/errors"
-import { seedDemoData } from "@/lib/demo-data"
 
 export default function PatientsPage() {
   const [searchTerm, setSearchTerm] = useState("")
@@ -54,17 +50,11 @@ export default function PatientsPage() {
   const [open, setOpen] = useState(false)
   const { toast } = useToast()
   
-  const db = useFirestore()
-  const patientsQuery = useMemoFirebase(() => db ? collection(db, 'patients') : null, [db])
-  const { data: patients, loading } = useCollection(patientsQuery)
-
-  useEffect(() => {
-    if (db) seedDemoData(db)
-  }, [db])
+  // Usamos os dados estáticos como base
+  const [patients, setPatients] = useState<Patient[]>(INITIAL_PATIENTS)
 
   const filteredPatients = useMemo(() => {
-    if (!patients) return [];
-    return patients.filter((p: any) => 
+    return patients.filter((p) => 
       p.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
       p.clinicalId?.toLowerCase().includes(searchTerm.toLowerCase())
     );
@@ -72,38 +62,26 @@ export default function PatientsPage() {
 
   const handleCreatePatient = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    if (!db) return
-    
     setIsSaving(true)
+    
     const formData = new FormData(e.currentTarget)
-    const patientData = {
+    const newPatient: Patient = {
+      id: `custom-${Date.now()}`,
       name: formData.get('name') as string,
       age: Number(formData.get('age')),
       clinicalId: formData.get('clinicalId') as string,
       status: 'active',
       type: 'Avaliar',
       lastVisit: new Date().toISOString().split('T')[0],
-      createdAt: serverTimestamp()
+      evolutions: [],
+      activities: []
     }
     
-    const patientsCollectionRef = collection(db, 'patients')
-
-    // Fechamos o modal e limpamos o estado de carregamento de forma otimista ou logo após a chamada
-    addDoc(patientsCollectionRef, patientData)
-      .then(() => {
-        toast({ title: "Paciente Cadastrado", description: "O registro foi criado com sucesso." })
-        setOpen(false)
-        setIsSaving(false)
-      })
-      .catch(async (serverError) => {
-        setIsSaving(false)
-        const permissionError = new FirestorePermissionError({
-          path: patientsCollectionRef.path,
-          operation: 'create',
-          requestResourceData: patientData,
-        });
-        errorEmitter.emit('permission-error', permissionError);
-      })
+    // Simula salvamento fechando o modal imediatamente
+    setPatients(prev => [newPatient, ...prev])
+    setOpen(false)
+    setIsSaving(false)
+    toast({ title: "Paciente Cadastrado", description: "O registro foi criado com sucesso (sessão local)." })
   }
 
   return (
@@ -116,7 +94,7 @@ export default function PatientsPage() {
         
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button className="gap-2 w-full md:w-auto shadow-md">
+            <Button className="gap-2 w-full md:w-auto shadow-md rounded-xl">
               <UserPlus className="h-4 w-4" />
               Novo Paciente
             </Button>
@@ -147,7 +125,7 @@ export default function PatientsPage() {
               </div>
               <DialogFooter className="gap-2">
                 <Button type="button" variant="ghost" onClick={() => setOpen(false)} disabled={isSaving}>Cancelar</Button>
-                <Button type="submit" disabled={isSaving} className="min-w-[120px] shadow-sm">
+                <Button type="submit" disabled={isSaving} className="min-w-[120px] shadow-sm rounded-xl">
                   {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Salvar Registro"}
                 </Button>
               </DialogFooter>
@@ -156,7 +134,7 @@ export default function PatientsPage() {
         </Dialog>
       </div>
 
-      <Card className="border-none shadow-sm overflow-hidden">
+      <Card className="border-none shadow-sm overflow-hidden rounded-2xl">
         <CardHeader className="pb-3 bg-white border-b">
           <div className="relative max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -182,16 +160,7 @@ export default function PatientsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {loading ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center py-20">
-                      <div className="flex flex-col items-center gap-3">
-                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                        <span className="text-sm text-muted-foreground animate-pulse">Consultando base de dados...</span>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : filteredPatients?.map((patient: any) => (
+                {filteredPatients.map((patient) => (
                   <TableRow key={patient.id} className="group hover:bg-slate-50/80 transition-colors">
                     <TableCell className="font-semibold">{patient.name}</TableCell>
                     <TableCell className="font-mono text-xs text-muted-foreground">{patient.clinicalId}</TableCell>
@@ -229,12 +198,12 @@ export default function PatientsPage() {
                     </TableCell>
                   </TableRow>
                 ))}
-                {(!filteredPatients || filteredPatients.length === 0) && !loading && (
+                {filteredPatients.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center py-20">
                       <div className="flex flex-col items-center gap-2">
                         <Activity className="h-10 w-10 text-slate-200" />
-                        <p className="text-muted-foreground font-medium">Nenhum registro encontrado para esta busca.</p>
+                        <p className="text-muted-foreground font-medium">Nenhum registro encontrado.</p>
                       </div>
                     </TableCell>
                   </TableRow>
