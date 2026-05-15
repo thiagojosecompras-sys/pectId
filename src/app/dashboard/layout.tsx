@@ -4,7 +4,7 @@ import { SidebarNavigation } from "@/components/layout/SidebarNavigation"
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
 import { Separator } from "@/components/ui/separator"
 import { Toaster } from "@/components/ui/toaster"
-import { ShieldCheck } from "lucide-react"
+import { ShieldCheck, User } from "lucide-react"
 
 export default function DashboardLayout({
   children,
@@ -21,13 +21,20 @@ export default function DashboardLayout({
             <Separator orientation="vertical" className="mx-2 h-4" />
             <div className="flex-1 flex items-center justify-between">
               <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest hidden sm:inline-block">Unidade Hospitalar Central</span>
-              <div className="flex items-center gap-2 px-3 py-1 bg-emerald-50 text-emerald-700 rounded-full">
-                <ShieldCheck className="h-3 w-3" />
-                <span className="text-[10px] font-bold uppercase">Acesso Seguro LGPD</span>
+              <div className="flex items-center gap-4">
+                <div className="hidden md:flex items-center gap-2 px-3 py-1 bg-emerald-50 text-emerald-700 rounded-full border border-emerald-100">
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                  <span className="text-[10px] font-bold uppercase">Acesso Seguro LGPD</span>
+                </div>
+                <div className="flex items-center gap-2 text-slate-500">
+                   <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200">
+                     <User className="h-4 w-4" />
+                   </div>
+                </div>
               </div>
             </div>
           </header>
-          <main className="p-4 md:p-10 max-w-7xl mx-auto w-full animate-slide-up">
+          <main className="p-4 md:p-8 max-w-7xl mx-auto w-full animate-slide-up">
             {children}
           </main>
           <Toaster />
