@@ -44,10 +44,13 @@ import Link from "next/link"
 import { useFirestore, useCollection } from "@/firebase"
 import { collection, addDoc, serverTimestamp } from "firebase/firestore"
 import { useToast } from "@/hooks/use-toast"
+import { errorEmitter } from "@/firebase/error-emitter"
+import { FirestorePermissionError } from "@/firebase/errors"
 
 export default function PatientsPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [isSaving, setIsSaving] = useState(false)
+  const [open, setOpen] = useState(false)
   const { toast } = useToast()
   
   const db = useFirestore()
@@ -59,30 +62,40 @@ export default function PatientsPage() {
     p.clinicalId.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
-  const handleCreatePatient = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleCreatePatient = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (!db) return
     
     setIsSaving(true)
     const formData = new FormData(e.currentTarget)
-    
-    try {
-      await addDoc(collection(db, 'patients'), {
-        name: formData.get('name'),
-        age: Number(formData.get('age')),
-        clinicalId: formData.get('clinicalId'),
-        status: 'active',
-        type: 'Avaliar',
-        lastVisit: new Date().toISOString().split('T')[0],
-        createdAt: serverTimestamp()
-      })
-      
-      toast({ title: "Paciente Cadastrado", description: "O registro foi criado com sucesso." })
-    } catch (err) {
-      toast({ title: "Erro", description: "Não foi possível salvar o paciente.", variant: "destructive" })
-    } finally {
-      setIsSaving(false)
+    const patientData = {
+      name: formData.get('name'),
+      age: Number(formData.get('age')),
+      clinicalId: formData.get('clinicalId'),
+      status: 'active',
+      type: 'Avaliar',
+      lastVisit: new Date().toISOString().split('T')[0],
+      createdAt: serverTimestamp()
     }
+    
+    const patientsCollectionRef = collection(db, 'patients')
+
+    addDoc(patientsCollectionRef, patientData)
+      .then(() => {
+        toast({ title: "Paciente Cadastrado", description: "O registro foi criado com sucesso." })
+        setOpen(false)
+      })
+      .catch(async (serverError) => {
+        const permissionError = new FirestorePermissionError({
+          path: patientsCollectionRef.path,
+          operation: 'create',
+          requestResourceData: patientData,
+        });
+        errorEmitter.emit('permission-error', permissionError);
+      })
+      .finally(() => {
+        setIsSaving(false)
+      })
   }
 
   return (
@@ -93,7 +106,7 @@ export default function PatientsPage() {
           <p className="text-muted-foreground">Gestão completa de prontuários eletrônicos.</p>
         </div>
         
-        <Dialog>
+        <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button className="gap-2 w-full md:w-auto">
               <UserPlus className="h-4 w-4" />
@@ -207,6 +220,13 @@ export default function PatientsPage() {
                     </TableCell>
                   </TableRow>
                 ))}
+                {filteredPatients?.length === 0 && !loading && (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
+                      Nenhum paciente encontrado.
+                    </TableCell>
+                  </TableRow>
+                )}
               </TableBody>
             </Table>
           </div>
