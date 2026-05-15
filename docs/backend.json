@@ -1,0 +1,44 @@
+
+{
+  "entities": {
+    "Patient": {
+      "title": "Patient",
+      "description": "Informações básicas e estado clínico do paciente",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "age": { "type": "number" },
+        "clinicalId": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "discharged", "critical"] },
+        "type": { "type": "string", "enum": ["Motor", "Cognitivo", "ADL", "Multimodal"] },
+        "lastVisit": { "type": "string", "format": "date" }
+      },
+      "required": ["name", "clinicalId", "status"]
+    },
+    "Activity": {
+      "title": "Activity",
+      "description": "Atividade de reabilitação sugerida pela IA ou terapeuta",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "difficultyType": { "type": "string", "enum": ["motor", "cognitive", "dailyActivity"] },
+        "status": { "type": "string", "enum": ["pending", "completed", "skipped"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
+    }
+  },
+  "auth": {
+    "providers": ["password"]
+  },
+  "firestore": {
+    "/patients/{patientId}": {
+      "schema": "#/backend/entities/Patient",
+      "description": "Documento principal do paciente"
+    },
+    "/patients/{patientId}/suggestedActivities/{activityId}": {
+      "schema": "#/backend/entities/Activity",
+      "description": "Atividades recomendadas para o paciente"
+    }
+  }
+}

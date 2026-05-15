@@ -1,6 +1,7 @@
+
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { useParams } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -11,17 +12,16 @@ import {
   Accessibility, 
   Home, 
   Sparkles, 
-  Calendar, 
   ChevronLeft,
-  Clock,
-  CheckCircle2,
-  AlertCircle
+  Loader2,
+  Trash2
 } from "lucide-react"
 import Link from "next/link"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
-import { suggestRehabilitationActivities, type SuggestedActivity } from "@/ai/flows/suggest-rehabilitation-activities"
+import { suggestRehabilitationActivities } from "@/ai/flows/suggest-rehabilitation-activities"
+import { useFirestore, useDoc, useCollection } from "@/firebase"
+import { doc, collection, addDoc, serverTimestamp, deleteDoc } from "firebase/firestore"
 
 const MOTOR_DIFFICULTIES = ["Fraqueza em membros inferiores", "Dificuldade de equilíbrio", "Espasticidade", "Amplitude de movimento reduzida"]
 const COGNITIVE_DIFFICULTIES = ["Lapsos de memória", "Dificuldade de concentração", "Desorientação temporal", "Afasia de expressão"]
@@ -30,7 +30,14 @@ const ADL_DIFFICULTIES = ["Dificuldade ao se vestir", "Necessidade de auxílio n
 export default function PatientDetailPage() {
   const { id } = useParams()
   const { toast } = useToast()
+  const db = useFirestore()
   
+  const patientRef = useMemo(() => db ? doc(db, 'patients', id as string) : null, [db, id])
+  const { data: patient } = useDoc(patientRef)
+  
+  const activitiesRef = useMemo(() => db ? collection(db, 'patients', id as string, 'suggestedActivities') : null, [db, id])
+  const { data: activities, loading: loadingActivities } = useCollection(activitiesRef)
+
   const [selectedMotor, setSelectedMotor] = useState<string[]>([])
   const [selectedCognitive, setSelectedCognitive] = useState<string[]>([])
   const [selectedADL, setSelectedADL] = useState<string[]>([])
@@ -39,11 +46,7 @@ export default function PatientDetailPage() {
 
   const handleGeneratePlan = async () => {
     if (selectedMotor.length === 0 && selectedCognitive.length === 0 && selectedADL.length === 0) {
-      toast({
-        title: "Seleção necessária",
-        description: "Selecione pelo menos uma dificuldade para gerar o plano.",
-        variant: "destructive"
-      })
+      toast({ title: "Seleção necessária", description: "Selecione dificuldades para a IA analisar.", variant: "destructive" })
       return
     }
 
@@ -55,46 +58,68 @@ export default function PatientDetailPage() {
         dailyActivityDifficulties: selectedADL
       })
       setAiSuggestions(result.suggestedActivities)
-      toast({
-        title: "Plano Gerado",
-        description: "A IA sugeriu novas atividades baseadas nas dificuldades registradas."
-      })
+      toast({ title: "Sugestões Geradas", description: "O Arquiteto de Atividades propôs novas intervenções." })
     } catch (error) {
-      toast({
-        title: "Erro ao gerar",
-        description: "Houve um problema ao consultar o Arquiteto de Atividades.",
-        variant: "destructive"
-      })
+      toast({ title: "Erro na IA", description: "Não foi possível gerar sugestões agora.", variant: "destructive" })
     } finally {
       setIsLoadingAI(false)
     }
   }
 
+  const handleSaveActivity = async (activity: any) => {
+    if (!db) return
+    try {
+      await addDoc(collection(db, 'patients', id as string, 'suggestedActivities'), {
+        ...activity,
+        status: 'pending',
+        createdAt: serverTimestamp()
+      })
+      setAiSuggestions(prev => prev.filter(a => a.name !== activity.name))
+      toast({ title: "Atividade Adicionada", description: "O plano do paciente foi atualizado." })
+    } catch (err) {
+      toast({ title: "Erro", description: "Falha ao salvar atividade.", variant: "destructive" })
+    }
+  }
+
+  const handleDeleteActivity = async (activityId: string) => {
+    if (!db) return
+    try {
+      await deleteDoc(doc(db, 'patients', id as string, 'suggestedActivities', activityId))
+      toast({ title: "Removido", description: "Atividade removida do cronograma." })
+    } catch (err) {
+      toast({ title: "Erro", description: "Não foi possível remover.", variant: "destructive" })
+    }
+  }
+
+  if (!patient) return <div className="p-10 text-center"><Loader2 className="animate-spin mx-auto" /></div>
+
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-6 pb-20">
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" asChild>
           <Link href="/patients"><ChevronLeft /></Link>
         </Button>
         <div>
-          <h1 className="text-3xl font-bold">Maria das Dores Oliveira</h1>
-          <div className="flex items-center gap-2 mt-1">
-            <Badge variant="secondary">ID: HOSP-0021</Badge>
-            <Badge variant="outline">74 anos</Badge>
-            <Badge className="bg-green-100 text-green-700 hover:bg-green-100 border-none">Ativo</Badge>
+          <h1 className="text-2xl sm:text-3xl font-bold">{patient.name}</h1>
+          <div className="flex flex-wrap items-center gap-2 mt-1">
+            <Badge variant="secondary">ID: {patient.clinicalId}</Badge>
+            <Badge variant="outline">{patient.age} anos</Badge>
+            <Badge className={patient.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}>
+              {patient.status === 'active' ? 'Ativo' : 'Crítico'}
+            </Badge>
           </div>
         </div>
       </div>
 
       <Tabs defaultValue="assessment" className="space-y-6">
-        <TabsList className="bg-muted/50 p-1 w-full justify-start max-w-md">
-          <TabsTrigger value="assessment" className="flex-1">Avaliação</TabsTrigger>
-          <TabsTrigger value="timeline" className="flex-1">Cronograma</TabsTrigger>
-          <TabsTrigger value="analytics" className="flex-1">Evolução</TabsTrigger>
+        <TabsList className="bg-muted/50 p-1 w-full justify-start overflow-x-auto">
+          <TabsTrigger value="assessment" className="flex-1">Nova Avaliação</TabsTrigger>
+          <TabsTrigger value="plan" className="flex-1">Plano Atual</TabsTrigger>
+          <TabsTrigger value="history" className="flex-1">Histórico</TabsTrigger>
         </TabsList>
 
         <TabsContent value="assessment" className="space-y-8 animate-slide-up">
-          <div className="grid md:grid-cols-3 gap-6">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
             <Card className="border-none shadow-sm">
               <CardHeader className="pb-2">
                 <div className="flex items-center gap-2 text-blue-600">
@@ -112,9 +137,7 @@ export default function PatientDetailPage() {
                         setSelectedMotor(prev => checked ? [...prev, item] : prev.filter(i => i !== item))
                       }}
                     />
-                    <label htmlFor={`motor-${item}`} className="text-sm leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                      {item}
-                    </label>
+                    <label htmlFor={`motor-${item}`} className="text-sm cursor-pointer">{item}</label>
                   </div>
                 ))}
               </CardContent>
@@ -137,19 +160,17 @@ export default function PatientDetailPage() {
                         setSelectedCognitive(prev => checked ? [...prev, item] : prev.filter(i => i !== item))
                       }}
                     />
-                    <label htmlFor={`cog-${item}`} className="text-sm leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                      {item}
-                    </label>
+                    <label htmlFor={`cog-${item}`} className="text-sm cursor-pointer">{item}</label>
                   </div>
                 ))}
               </CardContent>
             </Card>
 
-            <Card className="border-none shadow-sm">
+            <Card className="border-none shadow-sm sm:col-span-2 lg:col-span-1">
               <CardHeader className="pb-2">
                 <div className="flex items-center gap-2 text-teal-600">
                   <Home className="h-5 w-5" />
-                  <CardTitle className="text-lg">Atividades (ADL)</CardTitle>
+                  <CardTitle className="text-lg">ADL</CardTitle>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4 pt-4">
@@ -162,55 +183,43 @@ export default function PatientDetailPage() {
                         setSelectedADL(prev => checked ? [...prev, item] : prev.filter(i => i !== item))
                       }}
                     />
-                    <label htmlFor={`adl-${item}`} className="text-sm leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                      {item}
-                    </label>
+                    <label htmlFor={`adl-${item}`} className="text-sm cursor-pointer">{item}</label>
                   </div>
                 ))}
               </CardContent>
             </Card>
           </div>
 
-          <div className="flex justify-center pt-4">
+          <div className="flex justify-center">
             <Button 
               size="lg" 
-              className="gap-2 px-8 h-12 bg-secondary hover:bg-secondary/90 text-white" 
+              className="gap-2 w-full max-w-md h-12 bg-secondary hover:bg-secondary/90" 
               onClick={handleGeneratePlan}
               disabled={isLoadingAI}
             >
-              {isLoadingAI ? "Consultando Arquiteto de Atividades..." : (
-                <>
-                  <Sparkles className="h-5 w-5" />
-                  Arquitetar Plano de Reabilitação IA
-                </>
-              )}
+              {isLoadingAI ? <Loader2 className="animate-spin" /> : <Sparkles className="h-5 w-5" />}
+              {isLoadingAI ? "Processando..." : "Gerar Estratégia com IA"}
             </Button>
           </div>
 
           {aiSuggestions.length > 0 && (
-            <div className="space-y-6 pt-8">
-              <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-bold flex items-center gap-2">
-                  <Sparkles className="text-secondary h-6 w-6" />
-                  Atividades Sugeridas pela IA
-                </h2>
-                <Button variant="outline" onClick={() => setAiSuggestions([])}>Limpar Sugestões</Button>
-              </div>
-              <div className="grid md:grid-cols-2 gap-4">
+            <div className="space-y-4 pt-6">
+              <h2 className="text-xl font-bold flex items-center gap-2">
+                <Sparkles className="text-secondary h-5 w-5" />
+                Sugestões do Arquiteto
+              </h2>
+              <div className="grid sm:grid-cols-2 gap-4">
                 {aiSuggestions.map((act, i) => (
-                  <Card key={i} className="border-l-4 border-l-secondary shadow-sm hover:shadow-md transition-shadow">
-                    <CardHeader className="pb-2">
-                      <div className="flex justify-between items-start">
-                        <CardTitle className="text-base">{act.name}</CardTitle>
-                        <Badge variant="outline" className="capitalize text-[10px]">{act.difficultyType}</Badge>
-                      </div>
+                  <Card key={i} className="border-l-4 border-l-secondary shadow-sm">
+                    <CardHeader className="pb-2 flex flex-row items-start justify-between">
+                      <CardTitle className="text-base">{act.name}</CardTitle>
+                      <Badge variant="outline" className="capitalize text-[10px]">{act.difficultyType}</Badge>
                     </CardHeader>
                     <CardContent>
-                      <p className="text-sm text-muted-foreground">{act.description}</p>
-                      <div className="mt-4 flex gap-2">
-                        <Button size="sm" variant="secondary">Adicionar ao Cronograma</Button>
-                        <Button size="sm" variant="ghost">Ver Detalhes</Button>
-                      </div>
+                      <p className="text-xs text-muted-foreground mb-4">{act.description}</p>
+                      <Button size="sm" variant="secondary" onClick={() => handleSaveActivity(act)} className="w-full">
+                        Adicionar ao Prontuário
+                      </Button>
                     </CardContent>
                   </Card>
                 ))}
@@ -219,32 +228,30 @@ export default function PatientDetailPage() {
           )}
         </TabsContent>
 
-        <TabsContent value="timeline" className="animate-slide-up">
+        <TabsContent value="plan" className="animate-slide-up">
           <Card className="border-none shadow-sm">
             <CardHeader>
-              <CardTitle>Linha do Tempo de Tratamento</CardTitle>
-              <CardDescription>Acompanhe o cronograma de sessões e atividades planejadas.</CardDescription>
+              <CardTitle>Plano de Reabilitação Vigente</CardTitle>
+              <CardDescription>Atividades ativas no cronograma.</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-8 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-slate-300 before:to-transparent">
-                {[
-                  { title: "Sessão de Fisioterapia Motora", time: "Hoje, 14:00", status: "Agendado", icon: Accessibility, color: "text-blue-500", bg: "bg-blue-100" },
-                  { title: "Treino de ADL: Higiene Pessoal", time: "Amanhã, 09:30", status: "Pendente", icon: Home, color: "text-teal-500", bg: "bg-teal-100" },
-                  { title: "Avaliação de Memória Semântica", time: "25 Nov, 15:00", status: "Pendente", icon: Brain, color: "text-purple-500", bg: "bg-purple-100" },
-                  { title: "Exercício de Equilíbrio Estático", time: "22 Nov, 10:00", status: "Concluído", icon: Accessibility, color: "text-green-500", bg: "bg-green-100" },
-                ].map((item, i) => (
-                  <div key={i} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
-                    <div className="flex items-center justify-center w-10 h-10 rounded-full border border-white bg-slate-300 group-[.is-active]:bg-primary text-slate-500 group-[.is-active]:text-white shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2">
-                      <item.icon className="h-5 w-5" />
-                    </div>
-                    <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-xl border bg-white shadow-sm">
-                      <div className="flex items-center justify-between space-x-1 mb-1">
-                        <div className="font-bold text-slate-900">{item.title}</div>
-                        <time className="font-medium text-xs text-secondary">{item.time}</time>
+              <div className="space-y-4">
+                {loadingActivities ? <Loader2 className="animate-spin mx-auto" /> : activities?.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-10">Nenhuma atividade ativa. Gere um plano acima.</p>
+                ) : activities?.map((activity: any) => (
+                  <div key={activity.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/10 transition-colors">
+                    <div className="flex gap-4 items-start">
+                      <div className={`p-2 rounded-lg ${activity.difficultyType === 'motor' ? 'bg-blue-100 text-blue-600' : activity.difficultyType === 'cognitive' ? 'bg-purple-100 text-purple-600' : 'bg-teal-100 text-teal-600'}`}>
+                        {activity.difficultyType === 'motor' ? <Accessibility className="h-5 w-5" /> : activity.difficultyType === 'cognitive' ? <Brain className="h-5 w-5" /> : <Home className="h-5 w-5" />}
                       </div>
-                      <div className="text-slate-500 text-sm mb-2">{item.status}</div>
-                      <Button variant="outline" size="sm" className="h-7 text-xs">Ajustar Horário</Button>
+                      <div>
+                        <h4 className="font-semibold text-sm">{activity.name}</h4>
+                        <p className="text-xs text-muted-foreground line-clamp-2">{activity.description}</p>
+                      </div>
                     </div>
+                    <Button variant="ghost" size="icon" onClick={() => handleDeleteActivity(activity.id)} className="text-red-500">
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
                 ))}
               </div>

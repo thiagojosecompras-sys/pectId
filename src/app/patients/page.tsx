@@ -1,6 +1,7 @@
+
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -13,12 +14,12 @@ import {
   TableRow 
 } from "@/components/ui/table"
 import { 
-  Plus, 
   Search, 
   MoreHorizontal, 
   FileText, 
   Activity,
-  UserPlus
+  UserPlus,
+  Loader2
 } from "lucide-react"
 import {
   DropdownMenu,
@@ -40,139 +41,175 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import Link from "next/link"
-
-const initialPatients = [
-  { id: "1", name: "Maria das Dores Oliveira", age: 74, clinicalId: "HOSP-0021", lastVisit: "2023-11-20", status: "Em Reabilitação", type: "Motor" },
-  { id: "2", name: "José Roberto Santos", age: 62, clinicalId: "HOSP-0045", lastVisit: "2023-11-22", status: "Estável", type: "Cognitivo" },
-  { id: "3", name: "Alice Maria Ferreira", age: 48, clinicalId: "HOSP-0122", lastVisit: "2023-11-19", status: "Crítico", type: "ADL" },
-  { id: "4", name: "Benedito Silva", age: 81, clinicalId: "HOSP-0008", lastVisit: "2023-11-23", status: "Em Reabilitação", type: "Motor" },
-  { id: "5", name: "Clara Mendes", age: 55, clinicalId: "HOSP-0099", lastVisit: "2023-11-15", status: "Alta Programada", type: "Multimodal" },
-]
+import { useFirestore, useCollection } from "@/firebase"
+import { collection, addDoc, serverTimestamp } from "firebase/firestore"
+import { useToast } from "@/hooks/use-toast"
 
 export default function PatientsPage() {
   const [searchTerm, setSearchTerm] = useState("")
+  const [isSaving, setIsSaving] = useState(false)
+  const { toast } = useToast()
+  
+  const db = useFirestore()
+  const patientsQuery = useMemo(() => db ? collection(db, 'patients') : null, [db])
+  const { data: patients, loading } = useCollection(patientsQuery)
+
+  const filteredPatients = patients?.filter((p: any) => 
+    p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    p.clinicalId.toLowerCase().includes(searchTerm.toLowerCase())
+  )
+
+  const handleCreatePatient = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    if (!db) return
+    
+    setIsSaving(true)
+    const formData = new FormData(e.currentTarget)
+    
+    try {
+      await addDoc(collection(db, 'patients'), {
+        name: formData.get('name'),
+        age: Number(formData.get('age')),
+        clinicalId: formData.get('clinicalId'),
+        status: 'active',
+        type: 'Avaliar',
+        lastVisit: new Date().toISOString().split('T')[0],
+        createdAt: serverTimestamp()
+      })
+      
+      toast({ title: "Paciente Cadastrado", description: "O registro foi criado com sucesso." })
+    } catch (err) {
+      toast({ title: "Erro", description: "Não foi possível salvar o paciente.", variant: "destructive" })
+    } finally {
+      setIsSaving(false)
+    }
+  }
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Registro de Pacientes</h1>
-          <p className="text-muted-foreground">Gerencie o prontuário e histórico clínico dos seus pacientes.</p>
+          <p className="text-muted-foreground">Gestão completa de prontuários eletrônicos.</p>
         </div>
         
         <Dialog>
           <DialogTrigger asChild>
-            <Button className="gap-2">
+            <Button className="gap-2 w-full md:w-auto">
               <UserPlus className="h-4 w-4" />
               Novo Paciente
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[500px]">
-            <DialogHeader>
-              <DialogTitle>Cadastrar Novo Paciente</DialogTitle>
-              <DialogDescription>
-                Insira as informações básicas para iniciar o acompanhamento clínico.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="name" className="text-right">Nome Completo</Label>
-                <Input id="name" className="col-span-3" />
+            <form onSubmit={handleCreatePatient}>
+              <DialogHeader>
+                <DialogTitle>Cadastrar Novo Paciente</DialogTitle>
+                <DialogDescription>
+                  Informações iniciais para o prontuário.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="name">Nome Completo</Label>
+                  <Input id="name" name="name" required />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="age">Idade</Label>
+                    <Input id="age" name="age" type="number" required />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="clinicalId">ID Clínico</Label>
+                    <Input id="clinicalId" name="clinicalId" placeholder="HOSP-XXXX" required />
+                  </div>
+                </div>
               </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="age" className="text-right">Idade</Label>
-                <Input id="age" type="number" className="col-span-3" />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="clinical_id" className="text-right">ID Clínico</Label>
-                <Input id="clinical_id" className="col-span-3" placeholder="HOSP-XXXX" />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button type="submit">Salvar Registro</Button>
-            </DialogFooter>
+              <DialogFooter>
+                <Button type="submit" disabled={isSaving}>
+                  {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Salvar Registro
+                </Button>
+              </DialogFooter>
+            </form>
           </DialogContent>
         </Dialog>
       </div>
 
-      <Card className="border-none shadow-sm">
+      <Card className="border-none shadow-sm overflow-hidden">
         <CardHeader className="pb-3">
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar por nome, ID ou diagnóstico..."
-                className="pl-9"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
-            <Button variant="outline" size="icon">
-              <Activity className="h-4 w-4" />
-            </Button>
+          <div className="relative">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar por nome ou ID..."
+              className="pl-9"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
           </div>
         </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Paciente</TableHead>
-                <TableHead>ID Clínico</TableHead>
-                <TableHead>Idade</TableHead>
-                <TableHead>Tipo Principal</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Última Visita</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {initialPatients.map((patient) => (
-                <TableRow key={patient.id}>
-                  <TableCell className="font-medium">{patient.name}</TableCell>
-                  <TableCell className="font-mono text-xs">{patient.clinicalId}</TableCell>
-                  <TableCell>{patient.age} anos</TableCell>
-                  <TableCell>
-                    <Badge variant="outline">{patient.type}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge 
-                      variant={patient.status === "Em Reabilitação" ? "default" : "secondary"}
-                      className={patient.status === "Crítico" ? "bg-red-100 text-red-700 border-red-200" : ""}
-                    >
-                      {patient.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>{patient.lastVisit}</TableCell>
-                  <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuLabel>Ações Clínicas</DropdownMenuLabel>
-                        <DropdownMenuItem asChild>
-                          <Link href={`/patients/${patient.id}`} className="flex items-center gap-2">
-                            <FileText className="h-4 w-4" />
-                            Ver Prontuário
-                          </Link>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem className="flex items-center gap-2">
-                          <Activity className="h-4 w-4" />
-                          Nova Avaliação
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem className="text-red-600 focus:text-red-600">
-                          Arquivar Paciente
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="min-w-[200px]">Paciente</TableHead>
+                  <TableHead>ID</TableHead>
+                  <TableHead className="hidden sm:table-cell">Idade</TableHead>
+                  <TableHead className="hidden md:table-cell">Especialidade</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-10">
+                      <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" />
+                    </TableCell>
+                  </TableRow>
+                ) : filteredPatients?.map((patient: any) => (
+                  <TableRow key={patient.id}>
+                    <TableCell className="font-medium">{patient.name}</TableCell>
+                    <TableCell className="font-mono text-xs">{patient.clinicalId}</TableCell>
+                    <TableCell className="hidden sm:table-cell">{patient.age} anos</TableCell>
+                    <TableCell className="hidden md:table-cell">
+                      <Badge variant="outline">{patient.type}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge 
+                        variant={patient.status === "active" ? "default" : "secondary"}
+                        className={patient.status === "critical" ? "bg-red-100 text-red-700 border-red-200" : ""}
+                      >
+                        {patient.status === 'active' ? 'Em Reabilitação' : patient.status === 'critical' ? 'Crítico' : 'Estável'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuLabel>Ações</DropdownMenuLabel>
+                          <DropdownMenuItem asChild>
+                            <Link href={`/patients/${patient.id}`} className="flex items-center gap-2">
+                              <FileText className="h-4 w-4" />
+                              Ver Prontuário
+                            </Link>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem className="flex items-center gap-2">
+                            <Activity className="h-4 w-4" />
+                            Nova Avaliação
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
     </div>
